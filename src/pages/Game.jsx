@@ -23,7 +23,7 @@ export default function Game() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 font-sans pb-4">
+    <div className="max-w-7xl mx-auto px-6 font-sans">
       {/* 顶部信息 */}
         <div className="flex items-center pt-4 mb-2">
             {/* 返回按钮 - 去掉原有的 mb-6，保留 pt-4 到外层 flex 容器 */}

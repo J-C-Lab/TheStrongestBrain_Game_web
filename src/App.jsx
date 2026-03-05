@@ -22,8 +22,8 @@ function App() {
         {/* Navbar 现在是真·全局组件 */}
         <Navbar />
 
-        {/* pt-16 (padding-top: 4rem) 统一为导航栏留出空间，防止内容被压住 */}
-        <div className="pt-16">
+        {/*  统一为导航栏留出空间，防止内容被压住 */}
+        <div className="pt-14 mt-0">
           <Routes>
             {/* 所有人都能访问的登录页 */}
             <Route path="/login" element={<Login />} />

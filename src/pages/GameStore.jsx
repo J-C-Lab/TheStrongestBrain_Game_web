@@ -28,6 +28,38 @@ export default function GameStore() {
       difficulty: '⭐⭐⭐',
       color: 'bg-emerald-500',
       tags: ['路径规划', '工作记忆']
+    },
+    {
+      id: 'logic-maz',
+      title: '盲眼迷宫 (Blind Maze)',
+      description: '只看一眼迷宫全貌，随后在全黑状态下通过方向键指令走出迷宫。',
+      difficulty: '⭐⭐⭐',
+      color: 'bg-emerald-500',
+      tags: ['路径规划', '工作记忆']
+    },
+    {
+      id: 'logic-m',
+      title: '盲眼迷宫 (Blind Maze)',
+      description: '只看一眼迷宫全貌，随后在全黑状态下通过方向键指令走出迷宫。',
+      difficulty: '⭐⭐⭐',
+      color: 'bg-emerald-500',
+      tags: ['路径规划', '工作记忆']
+    },
+    {
+      id: 'logi',
+      title: '盲眼迷宫 (Blind Maze)',
+      description: '只看一眼迷宫全貌，随后在全黑状态下通过方向键指令走出迷宫。',
+      difficulty: '⭐⭐⭐',
+      color: 'bg-emerald-500',
+      tags: ['路径规划', '工作记忆']
+    },
+    {
+      id: 'lo',
+      title: '盲眼迷宫 (Blind Maze)',
+      description: '只看一眼迷宫全貌，随后在全黑状态下通过方向键指令走出迷宫。',
+      difficulty: '⭐⭐⭐',
+      color: 'bg-emerald-500',
+      tags: ['路径规划', '工作记忆']
     }
   ];
 
@@ -38,7 +70,7 @@ export default function GameStore() {
   };
 
   return (
-    <div className="min-h-screen bg-apple-lightBg dark:bg-apple-darkBg transition-colors duration-500 p-6 md:p-12 font-sans">
+    <div className="max-h-screen bg-apple-lightBg dark:bg-apple-darkBg transition-colors duration-500 p-6 md:px-2 md:pb-4 font-sans">
 
       {/* --- 游戏仓库 (App Store 风格网格) --- */}
       <main className="max-w-6xl mx-auto">

@@ -31,7 +31,7 @@ export default function Navbar() {
   return (
     // fixed 固定在顶部，并使用我们之前写好的 apple-glass 毛玻璃类名
     <nav className="fixed top-0 left-0 w-full z-50 apple-glass shadow-sm border-b border-transparent dark:border-white/5">
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-8xl mx-0 px-6 h-14 flex items-center justify-between">
         
         {/* 左侧：Logo 和系统名称 (点击可以回游戏主页) */}
         {isLoginPage ? (
@@ -39,13 +39,13 @@ export default function Navbar() {
             🧠 <span>最强大脑</span>
           </div>
         ) : (
-          <Link to="/gamestore" className="flex items-center gap-2 text-xl font-bold tracking-tight text-apple-lightText dark:text-apple-darkText hover:opacity-80 transition-opacity">
+          <Link to="/gamestore" className="flex items-center gap-3 text-xl font-bold tracking-tight text-apple-lightText dark:text-apple-darkText hover:opacity-80 transition-opacity">
             🧠 <span>最强大脑</span>
           </Link>
         )}
 
         {/* 右侧：操作区 */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-5 justify-end">
           
           {/* 切换主题按钮 */}
           <button 

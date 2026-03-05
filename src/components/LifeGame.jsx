@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import confetti from 'canvas-confetti'; // 引入礼炮魔法！
 
+
 export default function LifeGame() {
   const [difficulty, setDifficulty] = useState(1);
   const [gameState, setGameState] = useState('setup'); // setup | playing | result
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [startTime, setStartTime] = useState(null);//记录时间
+
   const cols = difficulty * 10; 
 
   const [initialGrid, setInitialGrid] = useState([]);
@@ -22,12 +24,17 @@ export default function LifeGame() {
   const startGame = async (level) => {
     setDifficulty(level);
     setIsLoading(true);
+    setStartTime(Date.now()); // 记录游戏开始的精确毫秒时间戳
     setResultData({ isCorrect: false, score: 0, actualSolution: null }); // 重置结算状态
+    const token = localStorage.getItem('token');
 
     try {
       const response = await fetch('http://localhost:3000/api/generate-puzzle', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`  
+        },
         body: JSON.stringify({ difficulty: level })
       });
       const data = await response.json();
@@ -50,15 +57,24 @@ export default function LifeGame() {
     setPlayerGrid(newGrid);
   };
 
-  // 【爆改】提交验证逻辑
+  // 提交验证逻辑
   const handleSubmit = async () => {
+    const token = localStorage.getItem('token');
+    // 计算耗时 (当前时间减去开局时间，除以1000变成秒)
+    const timeSpent = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
     try {
       const response = await fetch('http://localhost:3000/api/verify-puzzle', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`  
+        },
         body: JSON.stringify({ 
           puzzleId: currentPuzzleId, 
-          playerGrid: playerGrid 
+          playerGrid: playerGrid,
+          difficulty: difficulty,
+          gameId: 'life-game',
+          timeSpent: timeSpent  // 【关键】把真实耗时发给后端！
         })
       });
       const data = await response.json();
@@ -108,7 +124,7 @@ export default function LifeGame() {
 
       {/* 【新增】炫酷的结算横幅 */}
       {gameState === 'result' && (
-        <div className={`w-full p-3 mb-3 rounded-2xl flex items-center justify-between text-white shadow-xl transform transition-all duration-500 scale-100 ${
+        <div className={`w-full p-3 m-0 mb-3 rounded-2xl flex items-center justify-between text-white shadow-xl transform transition-all duration-500 scale-100 ${
           resultData.isCorrect ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-red-500 to-rose-400'
         }`}>
           <div>
