@@ -41,14 +41,14 @@ export default function GameStore() {
       tags: ['路径规划', '工作记忆']
     },
     {
-      id: 'logic-maz',
-      title: '盲眼迷宫 (Blind Maze)',
-      description: '只看一眼迷宫全貌，随后在全黑状态下通过方向键指令走出迷宫。',
+      id: 'sheep-game',
+      title: '羊了个羊 (Sheep Match)',
+      description: '经典三消挑战。层层叠叠的陷阱，只有智者才能看到最后的那只羊。',
       difficulty: '⭐⭐⭐',
-      color: 'bg-teal-300',
-      icon: '🧠',
-      category: '空间感知',
-      tags: ['路径规划', '工作记忆']
+      color: 'bg-green-500',
+      icon: '🐑',
+      category: '逻辑消除',
+      tags: ['三消', '策略', '层级思维']
     } 
   ];
 
