@@ -106,45 +106,63 @@ export default function GameStore() {
         </nav>
 
         {/* --- 游戏列表网格 --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {filteredGames.length > 0 ? (
             filteredGames.map((game) => (
+              /* 这里的 group 容器就是“卡包外壳” */
               <div 
                 key={game.id}
-                className="group bg-white dark:bg-[#1C1C1E] rounded-[2.5rem] p-6 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-2xl transition-all duration-500 flex flex-col"
+                className="group relative h-[360px] flex flex-col justify-end"
               >
-                {/* 游戏图标 */}
-                <div className={`w-16 h-16 rounded-2xl ${game.color} mb-6 shadow-lg flex items-center justify-center text-3xl transform group-hover:scale-110 transition-transform duration-300`}>
+                {/* --- 抽出的小卡片 (图标) --- */}
+                <div className={`
+                  absolute top-8 left-1/2 -translate-x-1/2 
+                  w-20 h-24 rounded-2xl ${game.color} 
+                  flex items-center justify-center text-4xl shadow-xl
+                  z-0 transition-all duration-500 ease-out
+                  group-hover:-translate-y-12 group-hover:rotate-3 group-hover:scale-110
+                `}>
                   {game.icon}
+                  {/* 卡片高光装饰 */}
+                  <div className="absolute inset-2 border border-white/20 rounded-xl"></div>
                 </div>
 
-                <div className="mb-2">
-                  <span className="text-[10px] uppercase tracking-widest text-blue-500 font-bold">{game.category}</span>
-                  <h3 className="text-xl font-bold mt-1">{game.title}</h3>
-                </div>
+                {/* --- 下方的卡包主体 (文字信息) --- */}
+                <div className="
+                  relative z-10 bg-white dark:bg-[#1C1C1E] 
+                  rounded-[2rem] p-5 shadow-sm border border-gray-100 dark:border-white/5 
+                  transition-all duration-300 group-hover:shadow-2xl
+                ">
+                  <div className="pt-6">
+                    <span className="text-[10px] uppercase tracking-widest text-blue-500 font-bold">
+                      {game.category}
+                    </span>
+                    <h3 className="text-lg font-bold mt-1 truncate">{game.title}</h3>
+                    
+                    <p className="text-xs text-gray-500 dark:text-gray-400 my-3 line-clamp-2 h-8">
+                      {game.description}
+                    </p>
 
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 line-clamp-2">
-                  {game.description}
-                </p>
+                    {/* 标签与难度 */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex gap-1">
+                        {game.tags.slice(0, 1).map(tag => (
+                          <span key={tag} className="px-2 py-0.5 text-[10px] rounded bg-gray-50 dark:bg-gray-800 text-gray-400">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-[10px] opacity-60 italic">{game.difficulty}</div>
+                    </div>
 
-                {/* 难度展示 */}
-                <div className="flex items-center justify-between mb-6 mt-auto">
-                  <div className="flex gap-1">
-                    {game.tags.slice(0, 2).map(tag => (
-                      <span key={tag} className="px-2 py-1 text-[10px] rounded-md bg-gray-50 dark:bg-gray-800 text-gray-400">
-                        {tag}
-                      </span>
-                    ))}
+                    <button 
+                      onClick={() => handlePlay(game.id)}
+                      className="w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-bold text-sm hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    >
+                      开始挑战
+                    </button>
                   </div>
-                  <div className="text-[10px] opacity-80">{game.difficulty}</div>
                 </div>
-
-                <button 
-                  onClick={() => handlePlay(game.id)}
-                  className="w-full py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition-all duration-300 active:scale-95"
-                >
-                  获取挑战
-                </button>
               </div>
             ))
           ) : (
