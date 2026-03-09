@@ -220,7 +220,7 @@ export default function ArrowMaze() {
         <div className={`text-6xl mb-6 ${resultData.isCorrect ? 'animate-bounce' : ''}`}>
           {resultData.isCorrect ? '🏆' : '💔'}
         </div>
-        <h2 className="text-3xl font-bold mb-4">{resultData.message}</h2>
+        <h2 className="text-3xl font-bold mb-4 text-blue-600">{resultData.message}</h2>
         {resultData.isCorrect && (
           <div className="text-center">
             <p className="text-2xl text-blue-400 font-bold mb-2">获得积分: +{resultData.score}</p>

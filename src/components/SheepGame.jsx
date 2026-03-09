@@ -22,18 +22,77 @@ export default function SheepGame() {
   const [winCount, setWinCount] = useState(0);
 
   const FORMATIONS = {
-    'T': [[0,0], [1,0], [2,0], [1,1], [1,2]],
+    'T': [
+      [0,0], [1,0], [2,0], [3,0],
+      [1.5, 1], [1.5, 2], [1.5, 3]
+    ],
     'O': [[0,0], [1,0], [2,0], [0,1], [2,1], [0,2], [1,2], [2,2]],
     'H': [[0,0], [0,1], [0,2], [1,1], [2,0], [2,1], [2,2]],
-    'CROSS': [[1,0], [0,1], [1,1], [2,1], [1,2]]
+    'CROSS': [[1,0], [0,1], [1,1], [2,1], [1,2]],
+    'HOLLOW_SQUARE': [
+      [0,0], [1,0], [2,0], [3,0], [4,0],
+      [0,1], [4,1],
+      [0,2], [4,2],
+      [0,3], [4,3],
+      [0,4], [1,4], [2,4], [3,4], [4,4]
+    ],
+    'WINGS': { left: [-1.5, 2], right: [5.5, 2] }
+  };
+
+  const rebalanceHiddenIcons = (allCards, currentSlot = [], currentTempSlot = []) => {
+    const activeCards = allCards.filter(c => c.status === 0);
+    if (activeCards.length === 0) return allCards;
+
+    // 1. 统计全场图标 (增加 Array.isArray 检查确保安全)
+    const safeSlot = Array.isArray(currentSlot) ? currentSlot : [];
+    const safeTemp = Array.isArray(currentTempSlot) ? currentTempSlot : [];
+    
+    const counts = {};
+    [...activeCards, ...safeSlot, ...safeTemp].forEach(c => {
+      counts[c.icon] = (counts[c.icon] || 0) + 1;
+    });
+
+    // 2. 识别落单图标
+    let oddIcons = Object.keys(counts).filter(icon => counts[icon] % 3 !== 0);
+    if (oddIcons.length === 0) return allCards;
+
+    // 3. 修正逻辑 (保持之前的逻辑，但确保 updatedCards 是深拷贝)
+    let updatedCards = JSON.parse(JSON.stringify(allCards));
+    let sortedIndices = updatedCards
+      .map((c, i) => ({ layer: c.layer, status: c.status, index: i }))
+      .filter(item => item.status === 0)
+      .sort((a, b) => a.layer - b.layer);
+
+    // 循环修正，直到没有落单图标
+    while (oddIcons.length > 0 && sortedIndices.length > 0) {
+      const iconToFix = oddIcons[0];
+      const target = sortedIndices.shift();
+      const currentCount = counts[iconToFix] || 0;
+      
+      // 目标是让这个图标变成3的倍数 (增加到最近的3的倍数)
+      const needToAdd = 3 - (currentCount % 3);
+      
+      for (let i = 0; i < needToAdd && sortedIndices.length > 0; i++) {
+        const extraTarget = sortedIndices.shift();
+        updatedCards[extraTarget.index].icon = iconToFix;
+      }
+      // 重新计算落单列表
+      const newCounts = {};
+      updatedCards.filter(c => c.status === 0).concat(currentSlot, currentTempSlot).forEach(c => {
+        newCounts[c.icon] = (newCounts[c.icon] || 0) + 1;
+      });
+      oddIcons = Object.keys(newCounts).filter(icon => newCounts[icon] % 3 !== 0);
+    }
+
+    return updatedCards;
   };
 
   // --- 核心：初始化发牌算法 ---
   const initGame = useCallback((diffLevel = difficulty, isNewSession = false) => {
     const config = {
-        '简单': { iconCount: 4, sets: 2, layers: 3, forms: ['O'] },
-        '中等': { iconCount: 6, sets: 4, layers: 5, forms: ['T', 'O'] },
-        '困难': { iconCount: 8, sets: 10, layers: 10, forms: ['T', 'O', 'H', 'CROSS'] }
+        '简单': { iconCount: 3, sets: 2, layers: 3, forms: ['O'], wingCount: 0 },
+        '中等': { iconCount: 7, sets: 3, layers: 6, forms: ['T', 'O', 'HOLLOW_SQUARE'], wingCount: 6 },
+        '困难': { iconCount: 11, sets: 3, layers: 10, forms: ['T', 'O', 'H', 'CROSS', 'HOLLOW_SQUARE'], wingCount: 12}
     }[diffLevel || difficulty];
 
     const newCards = [];
@@ -45,22 +104,40 @@ export default function SheepGame() {
     }
     iconPool = iconPool.sort(() => Math.random() - 0.5);
 
-    // 生成坐标：层级越高，越中心化
+    const totalWingCards = config.wingCount * 2; // 左右两边平分
+    const wingPool = iconPool.splice(0, totalWingCards);
+
     iconPool.forEach((icon, index) => {
-        const layer = Math.floor(index / (iconPool.length / config.layers));
-        // 随机选择一个阵型
-        const formKey = config.forms[Math.floor(Math.random() * config.forms.length)];
-        const formPos = FORMATIONS[formKey][index % FORMATIONS[formKey].length];
-        
-        // 这里的 50/60 是卡片间距，确保不溢出容器
-        newCards.push({
-          id: `c-${index}`,
-          icon,
-          x: 155 + formPos[0] * 60 * config.spacing, 
-          y: 110 + formPos[1] * 65 * config.spacing + (layer * 2), // 层叠高度差
-          layer: layer,
-          status: 0 
-        });
+      const layer = Math.floor(index / (iconPool.length / config.layers));
+      const formKey = config.forms[Math.floor(Math.random() * config.forms.length)];
+      const formPos = FORMATIONS[formKey][index % FORMATIONS[formKey].length];
+      
+      newCards.push({
+        id: `main-${index}`,
+        icon,
+        // 增加微量随机偏移 (±5px)，防止完全对齐导致用户看不见下层的牌
+        x: 155 + formPos[0] * 60 + (Math.random() * 5), 
+        y: 60 + formPos[1] * 65 + (layer * 3) + (Math.random() * 5),
+        layer: layer,
+        status: 0 
+      });
+    });
+
+    // --- 3. 处理左右长廊 (侧边两摞) ---
+    wingPool.forEach((icon, index) => {
+      const isLeft = index < config.wingCount;
+      const stackIndex = isLeft ? index : index - config.wingCount;
+      
+      newCards.push({
+        id: `wing-${index}`,
+        icon,
+        // x 轴：左侧在 20 左右，右侧在 580 左右
+        x: isLeft ? 20 : 580, 
+        // y 轴：模拟一摞牌整齐堆叠，每张只偏移 2 像素显出厚度
+        y: 250 + (stackIndex * 2), 
+        layer: 1000 + stackIndex, // 确保长廊的牌在视觉最上层
+        status: 0
+      });
     });
 
     setCards(newCards);
@@ -79,7 +156,7 @@ export default function SheepGame() {
   useEffect(() => { 
     setWinCount(0);
     setPlayCount(0);
-    initGame(); 
+    initGame(difficulty,true); 
   }, []);
 
   // 计时逻辑
@@ -144,11 +221,15 @@ export default function SheepGame() {
         setCards(prev => {
           const updated = prev.map(c => (c.icon === matchIcon && c.status === 1) ? { ...c, status: 2 } : c);
           const remaining = updated.filter(c => c.status !== 2).length;
+          const activeCards = updated.filter(c => c.status === 0);
+          if (activeCards.length > 0) {
+          // 调用平衡函数，确保剩下场上的牌 + 槽位的牌 = 3的倍数
+          return rebalanceHiddenIcons(updated, newSlot, tempSlot); 
+        }
           if (remaining === 0 && gameState === 'playing') {
             setGameState('won');
             setWinCount(prev => prev + 1);
-            
-            // 严格加分逻辑：只在这里执行一次
+
             const winScore = { '简单': 5, '中等': 10, '困难': 20 }[difficulty];
             setScore(s => s + winScore); 
             
@@ -189,11 +270,12 @@ export default function SheepGame() {
   };
 
   const toolShuffle = () => {
-    const active = cards.filter(c => c.status === 0);
-    const pos = active.map(c => ({ x: c.x, y: c.y, layer: c.layer })).sort(() => Math.random() - 0.5);
     setCards(prev => {
+      const activeCards = prev.filter(c => c.status === 0);
+      const shuffledPositions = activeCards.map(c => ({ x: c.x, y: c.y, layer: c.layer })).sort(() => Math.random() - 0.5);
       let i = 0;
-      return prev.map(c => c.status === 0 ? { ...c, ...pos[i++] } : c);
+      const positioned = prev.map(c => c.status === 0 ? { ...c, ...shuffledPositions[i++] } : c);
+      return rebalanceHiddenIcons(positioned, slot, tempSlot);
     });
   };
 
@@ -256,17 +338,24 @@ return (
         </div>
 
         {/* 底部槽位 */}
-        <div className="w-[450px] h-24 bg-[#8b5a2b] border-[8px] border-[#5d3a1d] rounded-3xl flex items-center px-3 gap-2 shadow-2xl">
-          <div className="absolute inset-0 flex items-center px-3 gap-2 pointer-events-none z-100">
+        <div className="relative w-[450px] h-24 bg-[#8b5a2b] border-[8px] border-[#5d3a1d] rounded-3xl items-center px-3 gap-2 shadow-2xl overflow-hidden">
+
+          <div className="absolute inset-0 flex items-center justify-center gap-2 pointer-events-none ">
             {[...Array(7)].map((_, i) => (
               <div key={i} className="w-12 h-14 border-2 border-dashed border-white/20 rounded-xl" />
             ))}
           </div>
-          {slot.map((s, i) => (
-            <div key={i} className="w-12 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-md animate-bounce-short">
-              {s.icon}
-            </div>
-          ))}
+          <div className = "flex items-center justify-center gap-2 z-10">
+            {[...Array(7)].map((_, i) => (
+              <div key={i} className="w-12 h-14 flex items-center justify-center">
+                {slot[i] ? (
+                  <div className="mt-2 w-12 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-md animate-bounce-short">
+                    {slot[i].icon}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       
