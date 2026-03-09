@@ -78,7 +78,7 @@ export default function SheepGame() {
   // 首次进入页面自动开始
   useEffect(() => { 
     setWinCount(0);
-    setPlayCount(1);
+    setPlayCount(0);
     initGame(); 
   }, []);
 

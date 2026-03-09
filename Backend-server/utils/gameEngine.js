@@ -13,7 +13,7 @@ const recordGameResult = (userId, gameId, difficulty, isWin, timeSpent, customSc
     if (playCount !== null) { play_count = playCount; } else{ play_count = 1; }
     if (winCount !== null) { win_count = winCount; } else{ win_count = 1; }
   }
-
+  console.log('判断输赢之后的结果：',scoreEarned,',',play_count,',',win_count)
   db.run(`INSERT INTO game_records (user_id, game_id, difficulty, is_win, time_spent) VALUES (?, ?, ?, ?, ?)`,
     [userId, gameId, difficulty, isWin, timeSpent || 0]);
 
@@ -37,7 +37,7 @@ const recordGameResult = (userId, gameId, difficulty, isWin, timeSpent, customSc
     const newSumNum = stats.sum_num_of_game + play_count;
     const newWinNum = isWin ? stats.win_num_of_game + win_count : stats.win_num_of_game;
     const newWinRate = newSumNum > 0 ? (newWinNum / newSumNum) : 0; 
-
+    console.log('计算之后的轮数：',newSumNum,',',newWinNum)
     dayTimeDict[todayDate] = (dayTimeDict[todayDate] || 0) + timeSpent;
     monthTimeDict[currentWeek] = (monthTimeDict[currentWeek] || 0) + timeSpent;
 
