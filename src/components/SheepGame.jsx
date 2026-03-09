@@ -43,54 +43,62 @@ export default function SheepGame() {
     const activeCards = allCards.filter(c => c.status === 0);
     if (activeCards.length === 0) return allCards;
 
-    // 1. 统计当前所有“存活”图标的总数
-    const totalNeeded = activeCards.length + currentSlot.length + currentTempSlot.length;
-    
-    // 2. 统计当前所有的图标
-    const currentPool = [];
-    activeCards.forEach(c => currentPool.push(c.icon));
-    currentSlot.forEach(c => currentPool.push(c.icon));
-    currentTempSlot.forEach(c => currentPool.push(c.icon));
+    // 1. 内部判定：哪些牌被压住了（status 为 0 且被其他 status 为 0 的牌盖住）
+    const checkIsCovered = (card, all) => {
+      return all.some(other => 
+        other.status === 0 && 
+        other.layer > card.layer && 
+        Math.abs(other.x - card.x) < 40 && 
+        Math.abs(other.y - card.y) < 40
+      );
+    };
+
+    // 2. 统计当前所有“已暴露”的图标总数（可见卡片 + 槽位 + 暂存区）
+    const visibleCards = activeCards.filter(c => !checkIsCovered(c, allCards));
+    const hiddenCards = activeCards.filter(c => checkIsCovered(c, allCards));
 
     const counts = {};
-    currentPool.forEach(icon => counts[icon] = (counts[icon] || 0) + 1);
+    [...visibleCards, ...currentSlot, ...currentTempSlot].forEach(c => {
+      counts[c.icon] = (counts[c.icon] || 0) + 1;
+    });
 
-    // 3. 核心：计算必须保留的图标（槽位和暂存区已有的，必须补齐到3的倍数）
-    let newActiveIcons = [];
-    const slotAndTemp = [...currentSlot, ...currentTempSlot];
-    const fixedCounts = {};
-    slotAndTemp.forEach(c => fixedCounts[c.icon] = (fixedCounts[c.icon] || 0) + 1);
-
-    // 为槽位和暂存区里落单的图标，从 activeCards 的配额里预留补齐名额
-    Object.keys(fixedCounts).forEach(icon => {
-      const remainder = fixedCounts[icon] % 3;
+    // 3. 计算为了凑成 3n，总共还需要补齐哪些图标
+    let neededIcons = [];
+    Object.keys(counts).forEach(icon => {
+      const remainder = counts[icon] % 3;
       if (remainder !== 0) {
-        const gap = 3 - remainder;
-        for (let i = 0; i < gap; i++) {
-          if (newActiveIcons.length < activeCards.length) {
-            newActiveIcons.push(icon);
-          }
+        for (let i = 0; i < (3 - remainder); i++) {
+          neededIcons.push(icon);
         }
       }
     });
 
-    // 4. 剩余名额用随机图标（成组）填满
-    while (newActiveIcons.length < activeCards.length) {
-      const randomIcon = ICONS[Math.floor(Math.random() * ICONS.length)];
-      // 每次填 3 个
-      for (let i = 0; i < 3; i++) {
-        if (newActiveIcons.length < activeCards.length) {
-          newActiveIcons.push(randomIcon);
-        }
-      }
+    // 4. 核心逻辑：确定哪些卡片的图标是可以“悄悄”修改的
+    // 优先改隐藏的 (hiddenCards)，如果隐藏的不够（游戏后期），再动可见的 (visibleCards)
+    let cardsToModify = [...hiddenCards];
+    if (neededIcons.length > hiddenCards.length) {
+      // 只有当底层牌真的不够补齐落单图标时，才动可见牌（按层级从低到高排，尽量减小视觉冲击）
+      const additionalNeeded = visibleCards.sort((a, b) => a.layer - b.layer);
+      cardsToModify = [...hiddenCards, ...additionalNeeded];
     }
 
-    // 5. 打乱新的图标池并映射回卡片
-    newActiveIcons = newActiveIcons.sort(() => Math.random() - 0.5);
-    let iconIdx = 0;
+    // 5. 构造平衡后的图标池
+    let finalPool = [...neededIcons];
+    while (finalPool.length < cardsToModify.length) {
+      const randomIcon = ICONS[Math.floor(Math.random() * ICONS.length)];
+      for (let i = 0; i < 3; i++) {
+        if (finalPool.length < cardsToModify.length) finalPool.push(randomIcon);
+      }
+    }
+    finalPool = finalPool.slice(0, cardsToModify.length).sort(() => Math.random() - 0.5);
+
+    // 6. 映射回原数组：只针对被选中的 cardsToModify 进行修改
+    const modifyIds = new Set(cardsToModify.map(c => c.id));
+    let mIdx = 0;
+
     return allCards.map(c => {
-      if (c.status === 0) {
-        return { ...c, icon: newActiveIcons[iconIdx++] };
+      if (modifyIds.has(c.id)) {
+        return { ...c, icon: finalPool[mIdx++] };
       }
       return c;
     });
@@ -104,52 +112,61 @@ export default function SheepGame() {
         '困难': { iconCount: 11, sets: 3, layers: 10, forms: ['T', 'O', 'H', 'CROSS', 'HOLLOW_SQUARE'], wingCount: 12}
     }[diffLevel || difficulty];
 
-    const newCards = [];
-    let iconPool = [];
+  // 1. 预先确定所有位置（Position Seeds）
+    const posSeeds = [];
     
-    // 确保每种图标都是 3 的倍数
-    for (let i = 0; i < config.iconCount; i++) {
-      for (let j = 0; j < config.sets * 3; j++) { iconPool.push(ICONS[i % ICONS.length]); }
+    // 中心区位置
+    const totalMainCards = (config.iconCount * config.sets * 3) - (config.wingCount * 2);
+    for (let i = 0; i < totalMainCards; i++) {
+      const layer = Math.floor(i / (totalMainCards / config.layers));
+      const formKey = config.forms[Math.floor(Math.random() * config.forms.length)];
+      const formPos = FORMATIONS[formKey][i % FORMATIONS[formKey].length];
+      posSeeds.push({
+        x: 155 + formPos[0] * 60 + (Math.random() * 8), 
+        y: 60 + formPos[1] * 65 + (layer * 3) + (Math.random() * 8),
+        layer: layer,
+        type: 'main'
+      });
     }
+
+    // 侧边区位置
+    for (let i = 0; i < config.wingCount * 2; i++) {
+      const isLeft = i < config.wingCount;
+      const stackIndex = isLeft ? i : i - config.wingCount;
+      posSeeds.push({
+        x: isLeft ? 20 : 580,
+        y: 250 + (stackIndex * 2),
+        layer: 1000 + stackIndex,
+        type: 'wing'
+      });
+    }
+
+    // 2. 【核心】按层级从高到低排序，进行逆向填充
+    const sortedSeeds = posSeeds.sort((a, b) => b.layer - a.layer);
+    const finalCards = [];
+    
+    // 准备图标池（确保每种 3 个）
+    let iconPool = [];
+    for (let i = 0; i < config.iconCount; i++) {
+      for (let j = 0; j < config.sets * 3; j++) {
+        iconPool.push(ICONS[i % ICONS.length]);
+      }
+    }
+    // 随机打乱图标池，但保持 3 个一组的逻辑
+    // (实际上这里直接打乱单个 icon 也可以，因为我们只要保证总数对即可)
     iconPool = iconPool.sort(() => Math.random() - 0.5);
 
-    const totalWingCards = config.wingCount * 2; // 左右两边平分
-    const wingPool = iconPool.splice(0, totalWingCards);
-
-    iconPool.forEach((icon, index) => {
-      const layer = Math.floor(index / (iconPool.length / config.layers));
-      const formKey = config.forms[Math.floor(Math.random() * config.forms.length)];
-      const formPos = FORMATIONS[formKey][index % FORMATIONS[formKey].length];
-      
-      newCards.push({
-        id: `main-${index}`,
-        icon,
-        // 增加微量随机偏移 (±5px)，防止完全对齐导致用户看不见下层的牌
-        x: 155 + formPos[0] * 60 + (Math.random() * 5), 
-        y: 60 + formPos[1] * 65 + (layer * 3) + (Math.random() * 5),
-        layer: layer,
-        status: 0 
-      });
-    });
-
-    // --- 3. 处理左右长廊 (侧边两摞) ---
-    wingPool.forEach((icon, index) => {
-      const isLeft = index < config.wingCount;
-      const stackIndex = isLeft ? index : index - config.wingCount;
-      
-      newCards.push({
-        id: `wing-${index}`,
-        icon,
-        // x 轴：左侧在 20 左右，右侧在 580 左右
-        x: isLeft ? 20 : 580, 
-        // y 轴：模拟一摞牌整齐堆叠，每张只偏移 2 像素显出厚度
-        y: 250 + (stackIndex * 2), 
-        layer: 1000 + stackIndex, // 确保长廊的牌在视觉最上层
+    // 3. 将图标分配给位置
+    sortedSeeds.forEach((seed, index) => {
+      finalCards.push({
+        id: `c-${index}`,
+        icon: iconPool[index],
+        ...seed,
         status: 0
       });
     });
 
-    setCards(newCards);
+    setCards(finalCards);
     setSlot([]);
     setTempSlot([]);
     setHistory([]);
