@@ -43,48 +43,57 @@ export default function SheepGame() {
     const activeCards = allCards.filter(c => c.status === 0);
     if (activeCards.length === 0) return allCards;
 
-    // 1. 统计全场图标 (增加 Array.isArray 检查确保安全)
-    const safeSlot = Array.isArray(currentSlot) ? currentSlot : [];
-    const safeTemp = Array.isArray(currentTempSlot) ? currentTempSlot : [];
+    // 1. 统计当前所有“存活”图标的总数
+    const totalNeeded = activeCards.length + currentSlot.length + currentTempSlot.length;
     
+    // 2. 统计当前所有的图标
+    const currentPool = [];
+    activeCards.forEach(c => currentPool.push(c.icon));
+    currentSlot.forEach(c => currentPool.push(c.icon));
+    currentTempSlot.forEach(c => currentPool.push(c.icon));
+
     const counts = {};
-    [...activeCards, ...safeSlot, ...safeTemp].forEach(c => {
-      counts[c.icon] = (counts[c.icon] || 0) + 1;
+    currentPool.forEach(icon => counts[icon] = (counts[icon] || 0) + 1);
+
+    // 3. 核心：计算必须保留的图标（槽位和暂存区已有的，必须补齐到3的倍数）
+    let newActiveIcons = [];
+    const slotAndTemp = [...currentSlot, ...currentTempSlot];
+    const fixedCounts = {};
+    slotAndTemp.forEach(c => fixedCounts[c.icon] = (fixedCounts[c.icon] || 0) + 1);
+
+    // 为槽位和暂存区里落单的图标，从 activeCards 的配额里预留补齐名额
+    Object.keys(fixedCounts).forEach(icon => {
+      const remainder = fixedCounts[icon] % 3;
+      if (remainder !== 0) {
+        const gap = 3 - remainder;
+        for (let i = 0; i < gap; i++) {
+          if (newActiveIcons.length < activeCards.length) {
+            newActiveIcons.push(icon);
+          }
+        }
+      }
     });
 
-    // 2. 识别落单图标
-    let oddIcons = Object.keys(counts).filter(icon => counts[icon] % 3 !== 0);
-    if (oddIcons.length === 0) return allCards;
-
-    // 3. 修正逻辑 (保持之前的逻辑，但确保 updatedCards 是深拷贝)
-    let updatedCards = JSON.parse(JSON.stringify(allCards));
-    let sortedIndices = updatedCards
-      .map((c, i) => ({ layer: c.layer, status: c.status, index: i }))
-      .filter(item => item.status === 0)
-      .sort((a, b) => a.layer - b.layer);
-
-    // 循环修正，直到没有落单图标
-    while (oddIcons.length > 0 && sortedIndices.length > 0) {
-      const iconToFix = oddIcons[0];
-      const target = sortedIndices.shift();
-      const currentCount = counts[iconToFix] || 0;
-      
-      // 目标是让这个图标变成3的倍数 (增加到最近的3的倍数)
-      const needToAdd = 3 - (currentCount % 3);
-      
-      for (let i = 0; i < needToAdd && sortedIndices.length > 0; i++) {
-        const extraTarget = sortedIndices.shift();
-        updatedCards[extraTarget.index].icon = iconToFix;
+    // 4. 剩余名额用随机图标（成组）填满
+    while (newActiveIcons.length < activeCards.length) {
+      const randomIcon = ICONS[Math.floor(Math.random() * ICONS.length)];
+      // 每次填 3 个
+      for (let i = 0; i < 3; i++) {
+        if (newActiveIcons.length < activeCards.length) {
+          newActiveIcons.push(randomIcon);
+        }
       }
-      // 重新计算落单列表
-      const newCounts = {};
-      updatedCards.filter(c => c.status === 0).concat(currentSlot, currentTempSlot).forEach(c => {
-        newCounts[c.icon] = (newCounts[c.icon] || 0) + 1;
-      });
-      oddIcons = Object.keys(newCounts).filter(icon => newCounts[icon] % 3 !== 0);
     }
 
-    return updatedCards;
+    // 5. 打乱新的图标池并映射回卡片
+    newActiveIcons = newActiveIcons.sort(() => Math.random() - 0.5);
+    let iconIdx = 0;
+    return allCards.map(c => {
+      if (c.status === 0) {
+        return { ...c, icon: newActiveIcons[iconIdx++] };
+      }
+      return c;
+    });
   };
 
   // --- 核心：初始化发牌算法 ---
@@ -220,22 +229,27 @@ export default function SheepGame() {
         setSlot(newSlot);
         setCards(prev => {
           const updated = prev.map(c => (c.icon === matchIcon && c.status === 1) ? { ...c, status: 2 } : c);
-          const remaining = updated.filter(c => c.status !== 2).length;
-          const activeCards = updated.filter(c => c.status === 0);
-          if (activeCards.length > 0) {
-          // 调用平衡函数，确保剩下场上的牌 + 槽位的牌 = 3的倍数
-          return rebalanceHiddenIcons(updated, newSlot, tempSlot); 
-        }
-          if (remaining === 0 && gameState === 'playing') {
-            setGameState('won');
-            setWinCount(prev => prev + 1);
 
-            const winScore = { '简单': 5, '中等': 10, '困难': 20 }[difficulty];
-            setScore(s => s + winScore); 
-            
-            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+          // --- 核心修正点：必须将 rebalance 的结果赋值并返回 ---
+          const activeCards = updated.filter(c => c.status === 0);
+          let finalCards = updated; 
+          
+          if (activeCards.length > 0) {
+            // 这里必须把 balanced 结果存下来
+            finalCards = rebalanceHiddenIcons(updated, newSlot, tempSlot); 
           }
-          return updated;
+
+         // 2. 判定胜利（使用 finalCards 进行判定）
+        const remaining = finalCards.filter(c => c.status !== 2).length;
+        if (remaining === 0 && gameState === 'playing') {
+          setGameState('won');
+          setWinCount(prev => prev + 1);
+          const winScore = { '简单': 5, '中等': 10, '困难': 20 }[difficulty];
+          setScore(s => s + winScore); 
+          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        }
+
+          return finalCards;
         });
       }, 200);
     } else if (currentSlot.length === 7) {
