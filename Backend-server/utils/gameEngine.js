@@ -3,14 +3,15 @@
 const moment = require('moment');// 日期处理
 const db = require('../db');
 
-const recordGameResult = (userId, gameId, difficulty, isWin, timeSpent, customScore = null) => {
+const recordGameResult = (userId, gameId, difficulty, isWin, timeSpent, customScore = null, playCount = null, winCount = null) => {
+  console.log(userId, gameId, difficulty, isWin, timeSpent, customScore, playCount, winCount);
   let scoreEarned = 0;
+  let play_count = 1;
+  let win_count = 0;
   if (isWin) {
-    if (customScore !== null) {
-      scoreEarned = customScore;
-    } else {
-      scoreEarned = difficulty === 1 ? 5 : difficulty === 2 ? 10 : 20;
-    }
+    if (customScore !== null) {scoreEarned = customScore;} else {scoreEarned = difficulty === 1 ? 5 : difficulty === 2 ? 10 : 20;}
+    if (playCount !== null) { play_count = playCount; } else{ play_count = 1; }
+    if (winCount !== null) { win_count = winCount; } else{ win_count = 1; }
   }
 
   db.run(`INSERT INTO game_records (user_id, game_id, difficulty, is_win, time_spent) VALUES (?, ?, ?, ?, ?)`,
@@ -33,8 +34,8 @@ const recordGameResult = (userId, gameId, difficulty, isWin, timeSpent, customSc
 
     const newSumTime = stats.sum_time_spent + timeSpent;
     const newSingleTime = currentSingleTime + timeSpent;
-    const newSumNum = stats.sum_num_of_game + 1;
-    const newWinNum = isWin ? stats.win_num_of_game + 1 : stats.win_num_of_game;
+    const newSumNum = stats.sum_num_of_game + play_count;
+    const newWinNum = isWin ? stats.win_num_of_game + win_count : stats.win_num_of_game;
     const newWinRate = newSumNum > 0 ? (newWinNum / newSumNum) : 0; 
 
     dayTimeDict[todayDate] = (dayTimeDict[todayDate] || 0) + timeSpent;
