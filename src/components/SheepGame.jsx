@@ -107,6 +107,7 @@ export default function SheepGame() {
 
   // --- 核心：初始化发牌算法 ---
   const initGame = useCallback((diffLevel = difficulty, isNewSession = false) => {
+    console.log('来到initGame')
     const config = {
         '简单': { iconCount: 3, sets: 2, layers: 3, forms: ['O'], wingCount: 0 },
         '中等': { iconCount: 7, sets: 3, layers: 6, forms: ['T', 'O', 'HOLLOW_SQUARE'], wingCount: 6 },
@@ -174,15 +175,17 @@ export default function SheepGame() {
     setGameState('playing');
     if (isNewSession) {
       setSeconds(0);
+      console.log('新的一局')
     }else{
       setPlayCount(prev => prev + 1)
+      console.log('加分！play_count',playCount);
     }
   }, [difficulty]);
 
   // 首次进入页面自动开始
   useEffect(() => { 
     setWinCount(0);
-    setPlayCount(0);
+    setPlayCount(1);
     initGame(difficulty,true); 
   }, []);
 
@@ -260,6 +263,7 @@ export default function SheepGame() {
          // 2. 判定胜利（使用 finalCards 进行判定）
         const remaining = finalCards.filter(c => c.status !== 2).length;
         if (remaining === 0 && gameState === 'playing') {
+          console.log('赢了！')
           setGameState('won');
           setWinCount(prev => prev + 1);
           const winScore = { '简单': 5, '中等': 10, '困难': 20 }[difficulty];
