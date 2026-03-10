@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import Game from './pages/Game';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -15,7 +16,31 @@ const ProtectedRoute = () => {
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 };
 
+const socket = io('http://223.2.46.245:3000');
+
 function App() {
+  useEffect(() => {
+    // 监听有人上线
+    socket.on('someone_joined', (data) => {
+      console.log('新队友上线，ID:', data.id);
+    });
+
+    // 监听广播消息
+    socket.on('new-message', (data) => {
+      alert('收到广播：' + data);
+    });
+
+    // 3. 组件销毁时记得清理，防止内存泄漏和重复弹窗
+    return () => {
+      socket.off('someone_joined');
+      socket.off('new-message');
+    };
+  }, []);
+
+  // 提供一个发送函数，给下层组件调用（后续建议用 Context 传这个 socket）
+  const testSend = () => {
+    socket.emit('chat-message', '从 PC 端发来的问候！');
+  };
   return (
     <ToastProvider>
       <BrowserRouter>
@@ -24,7 +49,7 @@ function App() {
           
           {/* Navbar 现在是真·全局组件 */}
           <Navbar />
-
+          <button onClick={testSend} className="fixed bottom-4 right-4 z-50 bg-blue-500 p-2 rounded">发送广播</button>
           {/*  统一为导航栏留出空间，防止内容被压住 */}
           <div className="pt-14 flex-1 overflow-x-hidden w-full">
             <Routes>
