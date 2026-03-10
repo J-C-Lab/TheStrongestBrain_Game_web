@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import BadgePavilion from '../components/BadgePavilion';
 import { useToast } from '../context/ToastContext';
+import { BASE_URL } from '../apiConfig';
 
 export default function Home() {
   const [userInfo, setUserInfo] = useState(null);
@@ -32,7 +33,7 @@ export default function Home() {
       }
       
       try {
-        const response = await fetch('http://localhost:3000/api/user/profile', {
+        const response = await fetch(`${BASE_URL}/api/user/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         // 如果 Token 过期或无效 (401/403)
@@ -73,7 +74,7 @@ export default function Home() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch('http://localhost:3000/api/user/update', {
+      const response = await fetch(`${BASE_URL}/api/user/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

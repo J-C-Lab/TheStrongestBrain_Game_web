@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../context/ToastContext';
 import {useNavigate } from 'react-router-dom';
+import { BASE_URL } from '../apiConfig';
 
 export default function PreciseWordGame() {
   const [gameState, setGameState] = useState('setup'); // setup, playing, result
@@ -54,7 +55,7 @@ export default function PreciseWordGame() {
     const token = localStorage.getItem('token');
     
     try {
-      const response = await fetch('http://localhost:3000/api/precise-word/generate', {
+      const response = await fetch(`${BASE_URL}/api/precise-word/generate`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error("获取题目失败");
@@ -201,7 +202,7 @@ export default function PreciseWordGame() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch('http://localhost:3000/api/precise-word/verify', {
+      const res = await fetch(`${BASE_URL}/api/precise-word/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ 

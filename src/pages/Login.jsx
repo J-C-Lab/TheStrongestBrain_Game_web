@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import RainbowParticleBg from '../components/RainbowParticleBg'; // 【新增BG导入】
 import { useToast } from '../context/ToastContext';
+import { BASE_URL } from '../apiConfig';
 
 export default function Login() {
   const [isFlipped,setIsFlipped] = useState(false);
@@ -25,7 +26,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/login', {
+      const response = await fetch(`${BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ system_id: loginId, password: loginPassword })
@@ -52,7 +53,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/register', {
+      const response = await fetch(`${BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nickname: regNickname, password: regPassword })

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../context/ToastContext';
 import confetti from 'canvas-confetti';
 import {useNavigate } from 'react-router-dom';
+import { BASE_URL } from '../apiConfig';
 
 // 方向坐标偏移量
 const DIR_MAP = {
@@ -34,7 +35,7 @@ export default function ArrowMaze() {
   useEffect(() => {
         const fetchPuzzle = async () => {
         try {
-        const response = await fetch('http://localhost:3000/api/arrow-maze/puzzle', {
+        const response = await fetch(`${BASE_URL}/api/arrow-maze/puzzle`, {
             method: 'GET', // 显式指定
             headers: { 
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -169,7 +170,7 @@ export default function ArrowMaze() {
     setIsGameOver(true);
     setIsProcessing(false);
     try {
-      const res = await fetch('http://localhost:3000/api/arrow-maze/verify', {
+      const res = await fetch(`${BASE_URL}/api/arrow-maze/verify`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

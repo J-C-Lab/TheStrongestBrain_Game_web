@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import confetti from 'canvas-confetti'; // 引入礼炮魔法！
 import { useToast } from '../context/ToastContext';
+import { BASE_URL } from '../apiConfig';
 
 export default function LifeGame() {
   const [difficulty, setDifficulty] = useState(1);
@@ -30,7 +31,7 @@ export default function LifeGame() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch('http://localhost:3000/api/life-game/generate', {
+      const response = await fetch(`${BASE_URL}/api/api/life-game/generate`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -64,7 +65,7 @@ export default function LifeGame() {
     // 计算耗时 (当前时间减去开局时间，除以1000变成秒)
     const timeSpent = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
     try {
-      const response = await fetch('http://localhost:3000/api/life-game/verify', {
+      const response = await fetch(`${BASE_URL}/api/api/life-game/verify`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

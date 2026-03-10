@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../context/ToastContext';
+import { BASE_URL } from '../apiConfig';
 
 export default function BadgePavilion({ isOpen, onClose, onSaveSuccess }) {
   const [badgeData, setBadgeData] = useState({ all: [], unlocked: [], equipped: [] });
@@ -15,7 +16,7 @@ export default function BadgePavilion({ isOpen, onClose, onSaveSuccess }) {
       setIsLoading(true);
       const token = localStorage.getItem('token');
       try {
-        const res = await fetch('http://localhost:3000/api/badges/pavilion', {
+        const res = await fetch(`${BASE_URL}/api/badges/pavilion`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -57,7 +58,7 @@ export default function BadgePavilion({ isOpen, onClose, onSaveSuccess }) {
     setIsSaving(true);
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:3000/api/badges/equip', {
+      const res = await fetch(`${BASE_URL}/api/badges/equip`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import {useNavigate } from 'react-router-dom';
+import { BASE_URL } from '../apiConfig';
 
 // 图标池
 const ICONS = ['🧶','🥎','🪅','🧸', '🌽', '🥕', '🪵', '🔥', '🔔', '🥛', '✂️'];
@@ -204,7 +205,7 @@ export default function SheepGame() {
     const payload = { gameId: 'sheep-game', timeSpent: seconds, difficulty, result: gameState, score , playCount: playCount , winCount: winCount };
     setScore(0);
     try {
-      await fetch('http://localhost:3000/api/sheep-game/deal', {
+      await fetch(`${BASE_URL}/api/sheep-game/deal`, {
         method: 'POST', // 确保这里是 POST
         headers: { 
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
