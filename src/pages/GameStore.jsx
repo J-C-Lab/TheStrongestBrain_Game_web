@@ -49,7 +49,17 @@ export default function GameStore() {
       icon: '🐑',
       category: '逻辑消除',
       tags: ['三消', '策略', '层级思维']
-    } 
+    },
+    {
+      id: 'draw-guess',
+      title: '你画我猜 (DoodleGame)',
+      description: '我敢画！你敢猜吗？！',
+      difficulty: '⭐',
+      color: 'bg-yellow-200',
+      icon: '🎨',
+      category: '好友消遣',
+      tags: ['联机', '休闲', '绘制']
+    },
   ];
 
   const categories = ['全部', ...new Set(gameStore.map(game => game.category))];

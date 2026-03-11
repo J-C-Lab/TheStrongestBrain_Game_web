@@ -3,6 +3,7 @@ import LifeGame from '../components/LifeGame'; // 引入生命游戏组件
 import PreciseWord from '../components/PreciseWord'; // 引入精准造字游戏组件
 import ArrowMaze from '../components/ArrowMaze'; // 引入箭阵迷域游戏组件
 import SheepGame from '../components/SheepGame'//引入羊了个羊组件
+import DrawGuess from '../components/DrawGuess'
 import { useToast } from '../context/ToastContext';
 
 export default function Game() {
@@ -20,6 +21,7 @@ export default function Game() {
     'precise-word': <PreciseWord />,
     'arrow-maze': <ArrowMaze />,
     'sheep-game': <SheepGame />,
+    'draw-guess': <DrawGuess/>
   };
   const currentGame = gameComponents[gameId];
 
