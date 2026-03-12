@@ -9,7 +9,7 @@ const socket = io(BASE_URL.replace('/api', ''), {
   auth: { token: localStorage.getItem('token') }
 });
 
-export default function DoodleGame() {
+export default function DrawGuess() {
   const { showMsg } = useToast();
   
   // 核心状态控制
@@ -38,11 +38,7 @@ export default function DoodleGame() {
         setView('waiting');
         showMsg(data.msg, "info");
     });
-    // winRounds: rooms[roomId].winRounds,
-    //         totalRounds: rooms[roomId].totalRounds,
-    //         score:rooms[roomId].score,
-    //         startTime: rooms[roomId].startTime,
-    //         word: rooms[roomId].word // 前端会根据身份自行遮蔽
+    
     socket.on('init-game', (data) => {
       setStats({ winRounds: data.winRounds, totalRounds: data.totalRounds, score: data.score, startTime: data.roundStartTime });
       setWord(data.word);
@@ -73,12 +69,30 @@ export default function DoodleGame() {
 
   // 2. 实时计时器
   useEffect(() => {
-    if (view !== 'playing') return;
-    const interval = setInterval(() => {
-      if (stats.startTime) setTimer(Math.floor((Date.now() - stats.startTime) / 1000));
+    if (view !== 'playing' || !stats.startTime) return;
+
+    const timerId = setInterval(() => {
+      const now = Date.now();
+      const diff = Math.floor((now - stats.startTime) / 1000);
+      setTimer(diff);
     }, 1000);
-    return () => clearInterval(interval);
+
+    return () => clearInterval(timerId); // 必须在清理函数中清除，防止内存泄漏
   }, [stats.startTime, view]);
+
+  useEffect(() => {
+    const resizeCanvas = () => {
+      const canvas = canvasRef.current;
+      // 安全拦截：如果 canvas 还没渲染出来，直接跳过，防止报错
+      if (!canvas || !canvas.parentElement) return;
+      const container = canvas.parentElement;
+      canvasRef.current.width = container.clientWidth - 40; // 减去边距
+      canvasRef.current.height = container.clientWidth * 0.7; // 保持比例
+    };
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    return () => window.removeEventListener('resize', resizeCanvas);
+  }, []);
 
   // --- 交互逻辑 ---
   const handleJoin = () => {
@@ -87,7 +101,8 @@ export default function DoodleGame() {
   };
 
   const selectRole = (selectedRole) => {
-    setRole(selectedRole);
+    console.log('发到后端的userid：')
+    setRole(selectedRole, localStorage.getItem('userId'));
     // 发送身份给后端
     socket.emit('join-room', { 
         roomId, 
@@ -124,6 +139,22 @@ export default function DoodleGame() {
   const handleGameOver = () => {
     setLastDrawData(canvasRef.current.toDataURL()); // 截取画作
     setView('result');
+  };
+
+  const handleSkip = () => {
+    // 只有画家有权发起跳过，或者协作模式下两人均可（看你设计）
+    // 这里建议判断一下，防止乱点
+    if (role !== 'painter') {
+        showMsg("只有画师可以发起跳过哦", "info");
+        return;
+    }
+
+    // 弹出确认框（可选，防止误触）
+    if (window.confirm("确定要跳过这道题吗？（不加分，但会进入下一轮）")) {
+        console.log('正在跳过题目...');
+        // 向后端发送跳过信号，必须带上 roomId
+        socket.emit('skip-word', { roomId });
+  }
   };
 
   // --- 视图渲染 ---
@@ -231,23 +262,57 @@ export default function DoodleGame() {
       </div>
 
       {/* 画板显示：木质画架效果 */}
-      <div className="relative p-6 bg-[#D2B48C] rounded-lg shadow-2xl border-[12px] border-[#8B4513]">
+      <div className="easel-frame p-2 md:p-6 bg-[#8B4513] rounded-lg shadow-xl w-[95%] md:w-full">
         {/* 画纸部分 */}
-        <div className="bg-white shadow-inner relative">
+        <div className="canvas-wrapper bg-white rounded shadow-inner overflow-hidden">
           <canvas
             ref={canvasRef}
             width={window.innerWidth > 600 ? 600 : window.innerWidth - 80}
             height={400}
             className={`touch-none ${role === 'painter' ? 'cursor-crosshair' : 'cursor-default'}`}
-            onMouseDown={(e) => { if(role==='painter') { setIsDrawing(true); canvasRef.current.lastPos=getPos(e); }}}
+            style={{ touchAction: 'none' }} /* 极其重要：禁止手机端画图时页面跟着滚动 */
+            
+            /* --- 电脑端：鼠标事件 --- */
+            onMouseDown={(e) => { 
+                if (role === 'painter') { 
+                    setIsDrawing(true); 
+                    canvasRef.current.lastPos = getPos(e); 
+                }
+            }}
             onMouseMove={(e) => {
-                if(!isDrawing || role!=='painter') return;
+                if (!isDrawing || role !== 'painter') return;
                 const pos = getPos(e);
-                drawOnCanvas(canvasRef.current.lastPos.x, canvasRef.current.lastPos.y, pos.x, pos.y, isEraser ? '#FFFFFF' : brushColor, isEraser ? 20 : 4);
+                drawOnCanvas(
+                    canvasRef.current.lastPos.x, canvasRef.current.lastPos.y, 
+                    pos.x, pos.y, 
+                    isEraser ? '#FFFFFF' : brushColor, 
+                    isEraser ? 20 : 4
+                );
                 canvasRef.current.lastPos = pos;
             }}
             onMouseUp={() => setIsDrawing(false)}
-            // 触屏逻辑同上
+            onMouseOut={() => setIsDrawing(false)} /* 鼠标移出画布时自动断笔 */
+
+            /* --- 手机端：触摸事件 --- */
+            onTouchStart={(e) => { 
+                if (role === 'painter') { 
+                    setIsDrawing(true); 
+                    canvasRef.current.lastPos = getPos(e); 
+                }
+            }}
+            onTouchMove={(e) => {
+                if (!isDrawing || role !== 'painter') return;
+                const pos = getPos(e);
+                drawOnCanvas(
+                    canvasRef.current.lastPos.x, canvasRef.current.lastPos.y, 
+                    pos.x, pos.y, 
+                    isEraser ? '#FFFFFF' : brushColor, 
+                    isEraser ? 20 : 4
+                );
+                canvasRef.current.lastPos = pos;
+            }}
+            onTouchEnd={() => setIsDrawing(false)}
+            onTouchCancel={() => setIsDrawing(false)} /* 触摸被打断（如来电弹窗）时自动断笔 */
           />
           
           {/* 画师提示 */}
