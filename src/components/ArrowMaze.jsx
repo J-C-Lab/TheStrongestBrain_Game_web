@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../context/ToastContext';
 import confetti from 'canvas-confetti';
-import {useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { BASE_URL } from '../apiConfig';
 
 // 方向坐标偏移量
