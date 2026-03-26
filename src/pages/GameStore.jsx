@@ -1,70 +1,78 @@
 import { useState, useMemo } from 'react';
 import {useNavigate } from 'react-router-dom';
-import { useToast } from '../context/ToastContext';
+
+const GAME_STORE = [
+  {
+    id: 'life-game',
+    title: '生命游戏 (Life Game)',
+    description: '基于 B3/S23 细胞自动机规则，在大脑中推演动态盘面，找出最终的稳定形态。',
+    difficulty: '⭐⭐⭐⭐⭐',
+    color: 'bg-yellow-500',
+    icon: '🌱',
+    category: '科学推演',
+    tags: ['空间推演', '规则计算']
+  },
+  {
+    id: 'precise-word',
+    title: '精准造字 (Precise Word)',
+    description: '在 6×6 字根矩阵中规划连线路径，配合冷却流转的部首池，在脑海中完成汉字的解构与重构。',
+    difficulty: '⭐⭐⭐⭐⭐',
+    icon: '✍️',
+    category: '语言逻辑',
+    color: 'bg-emerald-500',
+    tags: ['汉字储备', '路径规划', '瞬时记忆']
+  },
+  {
+    id: 'arrow-maze',
+    title: '箭阵迷域 (Arrow Maze)',
+    description: '在 8×8 网格中，每个格子有多个箭头方向，玩家需要选择起始弓箭旋钮，将盘面中所有旋钮都消除。',
+    difficulty: '⭐⭐⭐',
+    color: 'bg-amber-800',
+    icon: '🏹',
+    category: '空间感知',
+    tags: ['路径规划', '工作记忆']
+  },
+  {
+    id: 'sheep-game',
+    title: '羊了个羊 (Sheep Match)',
+    description: '经典三消挑战。层层叠叠的陷阱，只有智者才能看到最后的那只羊。',
+    difficulty: '⭐⭐⭐',
+    color: 'bg-green-500',
+    icon: '🐑',
+    category: '逻辑消除',
+    tags: ['三消', '策略', '层级思维']
+  },
+  {
+    id: 'draw-guess',
+    title: '你画我猜 (DoodleGame)',
+    description: '我敢画！你敢猜吗？！',
+    difficulty: '⭐',
+    color: 'bg-yellow-200',
+    icon: '🎨',
+    category: '好友消遣',
+    tags: ['联机', '休闲', '绘制']
+  },
+  {
+    id: 'real-fencing',
+    title: '宫廷击剑 (Real Fencing)',
+    description: '在复古宫廷氛围的真实剑道上切换漫游与比赛视角，体验第一人称击剑攻防与毫秒级判灯。',
+    difficulty: '⭐⭐⭐⭐',
+    color: 'bg-stone-500',
+    icon: '🤺',
+    category: '反应对抗',
+    tags: ['3D', '物理', '第一人称']
+  },
+];
+
 export default function GameStore() {
   const navigate = useNavigate();
-  const { showMsg } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
-  
 
-  const gameStore = [
-    {
-      id: 'life-game',
-      title: '生命游戏 (Life Game)',
-      description: '基于 B3/S23 细胞自动机规则，在大脑中推演动态盘面，找出最终的稳定形态。',
-      difficulty: '⭐⭐⭐⭐⭐',
-      color: 'bg-yellow-500',
-      icon: '🌱',
-      category: '科学推演',
-      tags: ['空间推演', '规则计算']
-    },
-    {
-      id: 'precise-word',
-      title: '精准造字 (Precise Word)',
-      description: '在 6×6 字根矩阵中规划连线路径，配合冷却流转的部首池，在脑海中完成汉字的解构与重构。',
-      difficulty: '⭐⭐⭐⭐⭐',
-      icon: '✍️',
-      category: '语言逻辑',
-      color: 'bg-emerald-500',
-      tags: ['汉字储备', '路径规划', '瞬时记忆']
-    },
-    {
-      id: 'arrow-maze',
-      title: '箭阵迷域 (Arrow Maze)',
-      description: '在 8×8 网格中，每个格子有多个箭头方向，玩家需要选择起始弓箭旋钮，将盘面中所有旋钮都消除。',
-      difficulty: '⭐⭐⭐',
-      color: 'bg-amber-800',
-      icon: '🏹',
-      category: '空间感知',
-      tags: ['路径规划', '工作记忆']
-    },
-    {
-      id: 'sheep-game',
-      title: '羊了个羊 (Sheep Match)',
-      description: '经典三消挑战。层层叠叠的陷阱，只有智者才能看到最后的那只羊。',
-      difficulty: '⭐⭐⭐',
-      color: 'bg-green-500',
-      icon: '🐑',
-      category: '逻辑消除',
-      tags: ['三消', '策略', '层级思维']
-    },
-    {
-      id: 'draw-guess',
-      title: '你画我猜 (DoodleGame)',
-      description: '我敢画！你敢猜吗？！',
-      difficulty: '⭐',
-      color: 'bg-yellow-200',
-      icon: '🎨',
-      category: '好友消遣',
-      tags: ['联机', '休闲', '绘制']
-    },
-  ];
-
-  const categories = ['全部', ...new Set(gameStore.map(game => game.category))];
+  const categories = ['全部', ...new Set(GAME_STORE.map(game => game.category))];
   const filteredGames = useMemo(() => {
-    return gameStore.filter(game => {
+    return GAME_STORE.filter(game => {
       const matchesSearch = game.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             game.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = activeCategory === '全部' || game.category === activeCategory;

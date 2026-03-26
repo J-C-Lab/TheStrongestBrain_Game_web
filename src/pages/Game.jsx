@@ -4,12 +4,11 @@ import PreciseWord from '../components/PreciseWord'; // 引入精准造字游戏
 import ArrowMaze from '../components/ArrowMaze'; // 引入箭阵迷域游戏组件
 import SheepGame from '../components/SheepGame'//引入羊了个羊组件
 import DrawGuess from '../components/DrawGuess'
-import { useToast } from '../context/ToastContext';
+import RealFencing from '../components/RealFencing';
 
 export default function Game() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { showMsg } = useToast();
   
   // 从网址中抓取游戏 id (比如点击后网址变成 /game?id=life-game，这里就是 'life-game')
   const gameId = searchParams.get('id');
@@ -21,7 +20,8 @@ export default function Game() {
     'precise-word': <PreciseWord />,
     'arrow-maze': <ArrowMaze />,
     'sheep-game': <SheepGame />,
-    'draw-guess': <DrawGuess/>
+    'draw-guess': <DrawGuess/>,
+    'real-fencing': <RealFencing />,
   };
   const currentGame = gameComponents[gameId];
 
