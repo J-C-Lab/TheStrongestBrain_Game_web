@@ -24,9 +24,10 @@ export default function Game() {
     'real-fencing': <RealFencing />,
   };
   const currentGame = gameComponents[gameId];
+  const isRealFencing = gameId === 'real-fencing';
 
   return (
-    <div className="max-w-7xl mx-auto px-6 font-sans">
+    <div className={`${isRealFencing ? 'w-full max-w-none px-4 md:px-6' : 'max-w-7xl px-6'} mx-auto font-sans`}>
       {/* 顶部信息 */}
         <div className="flex items-center pt-4 mb-2">
             {/* 返回按钮 - 去掉原有的 mb-6，保留 pt-4 到外层 flex 容器 */}
@@ -41,7 +42,7 @@ export default function Game() {
             {/* <h2 className="flex-1 text-center text-2xl font-bold">{gameStore.find(game => game.id === gameId)?.title || '游戏标题'}</h2> */}
         </div>
       {/* 渲染具体游戏画面 */}
-      <div className="mt-4">
+      <div className={isRealFencing ? 'mt-4 w-full min-h-[75vh]' : 'mt-4'}>
           {currentGame ? (
             currentGame
           ) : (

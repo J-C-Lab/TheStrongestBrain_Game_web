@@ -1,4 +1,4 @@
-﻿import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Html, PointerLockControls } from '@react-three/drei';
 import { Physics, RigidBody, CuboidCollider, CapsuleCollider, BallCollider } from '@react-three/rapier';
@@ -575,9 +575,12 @@ export default function RealFencing() {
   }, [clearTimers, resetForMode]);
 
   return (
-    <div ref={containerRef} className="relative mx-auto w-full overflow-hidden rounded-[32px] border border-stone-300/70 bg-[radial-gradient(circle_at_top,#fffaf2_0%,#eadfcd_60%,#d7c4ad_100%)] shadow-[0_30px_90px_rgba(88,63,37,0.18)]">
-      <div className="h-[780px] w-full">
-        <Canvas shadows dpr={[1, 1.7]} camera={{ position: [0, 1.7, 5], fov: 70, near: 0.1, far: 120 }}>
+    <div
+      ref={containerRef}
+      className="relative w-full h-[75vh] min-h-[600px] rounded-xl overflow-hidden border border-stone-300/70 bg-[radial-gradient(circle_at_top,#fffaf2_0%,#eadfcd_60%,#d7c4ad_100%)] shadow-2xl"
+    >
+      <div className="absolute inset-0">
+        <Canvas className="h-full w-full" shadows dpr={[1, 1.7]} camera={{ position: [0, 1.7, 5], fov: 70, near: 0.1, far: 120 }}>
           <fog attach="fog" args={['#efe5d7', 10, 34]} />
           <UIOverlay gameMode={gameMode} gameState={gameState} score={score} pointerLocked={pointerLocked} onModeChange={handleModeChange} />
           {gameMode === 'FENCING' && <HelmetMask />}
