@@ -1,9 +1,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, Html, PointerLockControls } from '@react-three/drei';
+import { Environment, OrbitControls, PointerLockControls } from '@react-three/drei';
 import { Physics, RigidBody, CuboidCollider, CapsuleCollider, BallCollider } from '@react-three/rapier';
 import * as THREE from 'three';
 
+const ROUND_DURATION_SECONDS = 180;
+const LIGHT_DURATION_MS = 2000;
 const ROAMING_SPAWN = { x: 0, y: 1.02, z: 4.8 };
 const PLAYER_SPAWN = { x: 0, y: 1.02, z: 2 };
 const OPPONENT_SPAWN = { x: 0, y: 1.02, z: -2 };
@@ -24,9 +26,20 @@ const MOVE = new THREE.Vector3();
 const CAMERA_POS = new THREE.Vector3();
 const LOOK_AT = new THREE.Vector3();
 const ZERO = { x: 0, y: 0, z: 0 };
+const EMPTY_LIGHTS = { player: false, opponent: false };
+const EMPTY_CARDS = {
+  player: { yellow: false, red: false, black: false },
+  opponent: { yellow: false, red: false, black: false },
+};
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function formatTime(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function resetBody(body, spawn) {
@@ -36,93 +49,185 @@ function resetBody(body, spawn) {
   body.setAngvel(ZERO, true);
 }
 
-// 1. UI 遮罩组件
-function HelmetMask() {
+// 1. UI 闁喚鍍电紒鍕
+function LightDot({ active, colorClass }) {
+  return <div className={`h-3.5 w-3.5 rounded-full border border-white/40 ${active ? colorClass : 'bg-white/10'}`} />;
+}
+
+function PenaltyStrip({ label, active, className }) {
   return (
-    <Html fullscreen style={{ pointerEvents: 'none' }}>
-      <div className="pointer-events-none absolute inset-0">
-        <svg className="h-full w-full opacity-50" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="maskShade" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="rgba(0,0,0,0.9)" />
-              <stop offset="28%" stopColor="rgba(0,0,0,0.28)" />
-              <stop offset="72%" stopColor="rgba(0,0,0,0.16)" />
-              <stop offset="100%" stopColor="rgba(0,0,0,0.82)" />
-            </linearGradient>
-          </defs>
-          <rect width="100" height="100" fill="url(#maskShade)" />
-          {Array.from({ length: 14 }, (_, index) => {
-            const x = 13 + index * 5.7;
-            return <path key={`v-${x}`} d={`M${x} 7 Q${x - 2} 50 ${x} 93`} fill="none" stroke="black" strokeWidth="1.35" />;
-          })}
-          {Array.from({ length: 10 }, (_, index) => {
-            const y = 14 + index * 7.7;
-            return <path key={`h-${y}`} d={`M8 ${y} Q50 ${y - 4} 92 ${y}`} fill="none" stroke="black" strokeWidth="1" />;
-          })}
-        </svg>
-      </div>
-    </Html>
+    <div
+      className={`h-6 w-4 rounded-sm border border-white/40 shadow ${active ? className : 'bg-white/10'}`}
+      title={label}
+    />
   );
 }
 
-function UIOverlay({ gameMode, gameState, score, pointerLocked, onModeChange }) {
+function FloatingToolbar({
+  gameMode,
+  gameState,
+  score,
+  timeLeft,
+  hitLights,
+  penaltyCards,
+  pointerLocked,
+  onModeChange,
+  onRestart,
+}) {
+  const toggleLabel = gameMode === 'ROAMING' ? 'Roaming -> Start Match' : 'Fencing -> Back To Roam';
+
   return (
-    <Html fullscreen style={{ pointerEvents: 'none' }}>
-      <div className="pointer-events-none absolute inset-0">
-        <div className="pointer-events-auto absolute left-1/2 top-4 w-[min(92vw,1080px)] -translate-x-1/2 rounded-3xl border border-stone-200/20 bg-stone-900/78 px-5 py-4 font-serif text-stone-100 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-md">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-200/80">Real Fencing In Castle Hall</div>
-              <div className="mt-1 text-lg md:text-xl">
-                {gameMode === 'ROAMING' ? '当前模式：城堡大厅漫游' : '当前模式：城堡中央击剑比赛'}
-              </div>
-              <div className="mt-2 text-sm text-stone-300/90">
-                {gameMode === 'ROAMING'
-                  ? 'WASD 漫游，鼠标看向城堡各处。'
-                  : 'WASD 移动，J 刺击，K 防守，Space 弓步，鼠标控制剑尖。'}
-              </div>
+    <div className="pointer-events-none absolute top-4 left-1/2 z-20 w-[min(96%,1100px)] -translate-x-1/2">
+      <div className="pointer-events-auto rounded-xl border border-white/20 bg-stone-900/50 text-stone-100 shadow-2xl backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-5">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.35em] text-amber-200/80">
+              Castle Fencing Toolbar
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-1 text-base font-semibold md:text-lg">
+              {gameMode === 'ROAMING' ? 'Castle Hall Third-Person Roaming' : 'Fencing First-Person Match'}
+            </div>
+            <div className="mt-1 text-xs text-stone-300/90">
+              {gameMode === 'ROAMING'
+                ? 'Drag to orbit the camera. WASD follows the current viewing direction.'
+                : pointerLocked
+                  ? 'First-person view is locked. Press Esc to release.'
+                  : 'Click Enter First-Person to enable stable match camera control.'}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {gameMode === 'FENCING' && (
               <button
                 id="fencing-lock-button"
                 type="button"
-                className="rounded-full border border-amber-200/35 bg-amber-100/10 px-4 py-2 text-sm text-amber-50 transition hover:bg-amber-100/20"
+                className="rounded-lg border border-amber-200/35 bg-amber-100/10 px-3 py-2 text-sm text-amber-50 transition hover:bg-amber-100/20"
               >
-                {pointerLocked ? '视角已锁定，按 Esc 退出' : '点击启用第一人称视角'}
+                {pointerLocked ? 'First-Person Active' : 'Enter First-Person'}
               </button>
-              <button
-                type="button"
-                onClick={() => onModeChange('ROAMING')}
-                className={`rounded-full px-4 py-2 text-sm transition ${gameMode === 'ROAMING' ? 'bg-stone-100 text-stone-900' : 'bg-stone-700/70 text-stone-100 hover:bg-stone-700'}`}
-              >
-                漫游
-              </button>
-              <button
-                type="button"
-                onClick={() => onModeChange('FENCING')}
-                className={`rounded-full px-4 py-2 text-sm transition ${gameMode === 'FENCING' ? 'bg-amber-200 text-stone-900' : 'bg-stone-700/70 text-stone-100 hover:bg-stone-700'}`}
-              >
-                比赛
-              </button>
+            )}
+            <button
+              type="button"
+              onClick={onModeChange}
+              className="rounded-lg bg-stone-100/90 px-3 py-2 text-sm font-medium text-stone-900 transition hover:bg-white"
+            >
+              {toggleLabel}
+            </button>
+            <button
+              type="button"
+              onClick={onRestart}
+              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm transition hover:bg-white/20"
+            >
+              Restart
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-t border-white/10 px-4 py-3 md:grid-cols-[1.1fr_0.9fr_1fr_1.2fr] md:px-5">
+          <div className="rounded-lg bg-black/15 px-3 py-2">
+            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Score</div>
+            <div className="mt-1 flex items-center gap-3 text-2xl font-bold">
+              <span>{score.player}</span>
+              <span className="text-stone-400">:</span>
+              <span>{score.opponent}</span>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-6 text-sm text-stone-200">
-            <div>状态：{gameState === 'HALTED' ? '判定暂停中' : '进行中'}</div>
-            <div>比分：{score.player} : {score.opponent}</div>
+
+          <div className="rounded-lg bg-black/15 px-3 py-2">
+            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Countdown</div>
+            <div className="mt-1 text-2xl font-bold">{formatTime(timeLeft)}</div>
+            <div className="mt-1 text-xs text-stone-300">
+              {gameMode === 'FENCING' && gameState === 'PLAYING' ? 'Timer running' : 'Timer paused'}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-black/15 px-3 py-2">
+            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Hit Lights</div>
+            <div className="mt-2 flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm">
+                <LightDot
+                  active={hitLights.player}
+                  colorClass="bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.9)]"
+                />
+                <span>Player Light</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <LightDot
+                  active={hitLights.opponent}
+                  colorClass="bg-red-400 shadow-[0_0_16px_rgba(248,113,113,0.9)]"
+                />
+                <span>Opponent Light</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-black/15 px-3 py-2">
+            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Penalty Cards</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="flex items-center justify-between gap-2 rounded-md bg-white/5 px-2 py-1.5">
+                <span className="text-sm">Player</span>
+                <div className="flex gap-1.5">
+                  <PenaltyStrip label="Yellow card" active={penaltyCards.player.yellow} className="bg-yellow-400" />
+                  <PenaltyStrip label="Red card" active={penaltyCards.player.red} className="bg-red-500" />
+                  <PenaltyStrip label="Black card" active={penaltyCards.player.black} className="bg-black" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-md bg-white/5 px-2 py-1.5">
+                <span className="text-sm">Opponent</span>
+                <div className="flex gap-1.5">
+                  <PenaltyStrip label="Yellow card" active={penaltyCards.opponent.yellow} className="bg-yellow-400" />
+                  <PenaltyStrip label="Red card" active={penaltyCards.opponent.red} className="bg-red-500" />
+                  <PenaltyStrip label="Black card" active={penaltyCards.opponent.black} className="bg-black" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </Html>
+    </div>
   );
 }
 
-// 2. RealisticCastle 场景组件 (地板、墙壁、光影)
+function HelmetMask() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10">
+      <svg className="h-full w-full opacity-50" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="maskShade" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgba(0,0,0,0.9)" />
+            <stop offset="28%" stopColor="rgba(0,0,0,0.28)" />
+            <stop offset="72%" stopColor="rgba(0,0,0,0.16)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0.82)" />
+          </linearGradient>
+        </defs>
+        <rect width="100" height="100" fill="url(#maskShade)" />
+        {Array.from({ length: 14 }, (_, index) => {
+          const x = 13 + index * 5.7;
+          return <path key={`v-${x}`} d={`M${x} 7 Q${x - 2} 50 ${x} 93`} fill="none" stroke="black" strokeWidth="1.35" />;
+        })}
+        {Array.from({ length: 10 }, (_, index) => {
+          const y = 14 + index * 7.7;
+          return <path key={`h-${y}`} d={`M8 ${y} Q50 ${y - 4} 92 ${y}`} fill="none" stroke="black" strokeWidth="1" />;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// 2. RealisticCastle 閸︾儤娅欑紒鍕 (閸︾増婢橀妴浣割暰婢逛降鈧礁鍘滆ぐ?
 function RealisticCastle() {
   return (
     <group>
       <mesh receiveShadow position={[0, -0.05, 0]}>
         <boxGeometry args={[15, 0.1, 15]} />
-        <meshPhysicalMaterial color="#d4c5b0" roughness={0.1} metalness={0.2} clearcoat={0.24} clearcoatRoughness={0.22} reflectivity={0.65} />
+        <meshPhysicalMaterial
+          color="#d4c5b0"
+          roughness={0.1}
+          metalness={0.2}
+          clearcoat={0.24}
+          clearcoatRoughness={0.22}
+          reflectivity={0.65}
+        />
       </mesh>
       <mesh castShadow receiveShadow position={[0, 3.5, -7.25]}>
         <boxGeometry args={[15, 7.2, 0.45]} />
@@ -180,11 +285,23 @@ function RealisticCastle() {
           </mesh>
           <mesh position={[0, 0.05, 0.12]}>
             <boxGeometry args={[0.48, 2.5, 0.04]} />
-            <meshStandardMaterial color="#635b54" emissive="#f3debf" emissiveIntensity={0.28} roughness={0.22} metalness={0.1} />
+            <meshStandardMaterial
+              color="#635b54"
+              emissive="#f3debf"
+              emissiveIntensity={0.28}
+              roughness={0.22}
+              metalness={0.1}
+            />
           </mesh>
           <mesh position={[0, 1.55, 0.12]} rotation={[0, 0, Math.PI / 4]}>
             <boxGeometry args={[0.36, 0.36, 0.04]} />
-            <meshStandardMaterial color="#635b54" emissive="#f3debf" emissiveIntensity={0.22} roughness={0.22} metalness={0.1} />
+            <meshStandardMaterial
+              color="#635b54"
+              emissive="#f3debf"
+              emissiveIntensity={0.22}
+              roughness={0.22}
+              metalness={0.1}
+            />
           </mesh>
         </group>
       ))}
@@ -205,20 +322,46 @@ function RealisticCastle() {
           </mesh>
           <mesh castShadow position={[0, 0.45, 0.16]}>
             <sphereGeometry args={[0.12, 20, 20]} />
-            <meshStandardMaterial color="#ffd39b" emissive="#f5cc85" emissiveIntensity={1.8} roughness={0.2} metalness={0.05} />
+            <meshStandardMaterial
+              color="#ffd39b"
+              emissive="#f5cc85"
+              emissiveIntensity={1.8}
+              roughness={0.2}
+              metalness={0.05}
+            />
           </mesh>
-          <pointLight castShadow color="#f5cc85" intensity={18} distance={10} decay={2} position={[0, 0.55, 0.5]} />
+          <pointLight
+            castShadow
+            color="#f5cc85"
+            intensity={18}
+            distance={10}
+            decay={2}
+            position={[0, 0.55, 0.5]}
+          />
         </group>
       ))}
 
       <ambientLight color="#f5ede0" intensity={0.22} />
-      <directionalLight castShadow color="#fff3dc" intensity={1.15} position={[3.5, 7.8, -2.6]} shadow-mapSize-width={2048} shadow-mapSize-height={2048} shadow-camera-near={0.5} shadow-camera-far={25} shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-12} />
+      <directionalLight
+        castShadow
+        color="#fff3dc"
+        intensity={1.15}
+        position={[3.5, 7.8, -2.6]}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-near={0.5}
+        shadow-camera-far={25}
+        shadow-camera-left={-12}
+        shadow-camera-right={12}
+        shadow-camera-top={12}
+        shadow-camera-bottom={-12}
+      />
       <pointLight color="#f5cc85" intensity={6} distance={12} decay={2} position={[-2.5, 3.8, 1.8]} />
     </group>
   );
 }
 
-// 3. Piste 剑道组件
+// 3. Piste 閸撴垿浜剧紒鍕
 function PisteLine({ position, size, color = '#f2f3f4' }) {
   return (
     <mesh position={position} receiveShadow>
@@ -249,7 +392,7 @@ function Piste() {
   );
 }
 
-// 4. Fencer 人物与剑组件 (包含刚体和武器)
+// 4. Fencer 娴滆櫣澧挎稉搴″ⅳ缂佸嫪娆?(閸栧懎鎯堥崚姘秼閸滃本顒熼崳?
 function FencerModel({ swordRef, bodyVisible, sensorName, onTipEnter, facingRotation, isPlayer }) {
   return (
     <group rotation={[0, facingRotation, 0]}>
@@ -269,6 +412,7 @@ function FencerModel({ swordRef, bodyVisible, sensorName, onTipEnter, facingRota
           </mesh>
         </>
       )}
+
       <group ref={swordRef} position={isPlayer ? [0.24, 0.48, 0.16] : [0.22, 0.48, 0.12]}>
         <mesh castShadow position={[0, 0, 0.06]}>
           <boxGeometry args={[0.14, 0.08, 0.18]} />
@@ -282,29 +426,84 @@ function FencerModel({ swordRef, bodyVisible, sensorName, onTipEnter, facingRota
           <cylinderGeometry args={[0.02, 0.02, 1.2, 16]} />
           <meshStandardMaterial metalness={1} roughness={0.1} color="silver" />
         </mesh>
-        <BallCollider sensor name={sensorName} userData={{ role: sensorName }} args={[0.055]} position={[0, 0, 1.39]} onIntersectionEnter={onTipEnter} />
+        <BallCollider
+          sensor
+          name={sensorName}
+          userData={{ role: sensorName }}
+          args={[0.055]}
+          position={[0, 0, 1.39]}
+          onIntersectionEnter={onTipEnter}
+        />
       </group>
     </group>
   );
 }
 
-function Fencer({ bodyRef, swordRef, colliderName, onTipEnter, position, facingRotation, bodyVisible, isPlayer }) {
+function Fencer({
+  bodyRef,
+  swordRef,
+  colliderName,
+  onTipEnter,
+  position,
+  facingRotation,
+  bodyVisible,
+  isPlayer,
+}) {
   const characterId = colliderName === 'player-body' ? 'player' : 'opponent';
+
   return (
-    <RigidBody ref={bodyRef} colliders={false} mass={1.1} friction={2.2} restitution={0.02} linearDamping={5.5} angularDamping={9} enabledRotations={[false, false, false]} canSleep={false} position={position}>
+    <RigidBody
+      ref={bodyRef}
+      colliders={false}
+      mass={1.1}
+      friction={2.2}
+      restitution={0.02}
+      linearDamping={5.5}
+      angularDamping={9}
+      enabledRotations={[false, false, false]}
+      canSleep={false}
+      position={position}
+    >
       <CapsuleCollider args={[0.6, 0.27]} name={colliderName} userData={{ characterId }} />
-      <FencerModel swordRef={swordRef} bodyVisible={bodyVisible} sensorName={`${characterId}-tip`} onTipEnter={onTipEnter} facingRotation={facingRotation} isPlayer={isPlayer} />
+      <FencerModel
+        swordRef={swordRef}
+        bodyVisible={bodyVisible}
+        sensorName={`${characterId}-tip`}
+        onTipEnter={onTipEnter}
+        facingRotation={facingRotation}
+        isPlayer={isPlayer}
+      />
     </RigidBody>
   );
 }
 
-function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, playerSwordRef, opponentSwordRef, keysRef, mouseAimRef, playerActionRef, opponentActionRef, aiRef }) {
+function SceneSystem({
+  gameMode,
+  gameState,
+  playerBodyRef,
+  opponentBodyRef,
+  playerSwordRef,
+  opponentSwordRef,
+  keysRef,
+  mouseAimRef,
+  playerActionRef,
+  opponentActionRef,
+  aiRef,
+  orbitRef,
+}) {
   const { camera } = useThree();
 
   useEffect(() => {
-    camera.position.set(ROAMING_SPAWN.x, ROAMING_SPAWN.y + CAMERA_HEIGHT, ROAMING_SPAWN.z);
-    camera.lookAt(0, 2, -4.8);
-  }, [camera]);
+    const player = playerBodyRef.current?.translation() ?? (gameMode === 'ROAMING' ? ROAMING_SPAWN : PLAYER_SPAWN);
+    if (gameMode === 'ROAMING') {
+      camera.position.set(player.x, player.y + 2.4, player.z + 5.2);
+      LOOK_AT.set(player.x, player.y + 0.75, player.z);
+      camera.lookAt(LOOK_AT);
+    } else {
+      camera.position.set(player.x, player.y + CAMERA_HEIGHT, player.z + 0.05);
+      camera.lookAt(0, 1.6, -2);
+    }
+  }, [camera, gameMode, playerBodyRef]);
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
@@ -312,6 +511,7 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
     const opponentBody = opponentBodyRef.current;
     const playerSword = playerSwordRef.current;
     const opponentSword = opponentSwordRef.current;
+    const orbit = orbitRef.current;
     if (!playerBody || !opponentBody || !playerSword || !opponentSword) return;
 
     const playerTranslation = playerBody.translation();
@@ -319,8 +519,10 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
     const playerVelocity = playerBody.linvel();
     const opponentVelocity = opponentBody.linvel();
 
-    CAMERA_POS.set(playerTranslation.x, playerTranslation.y + CAMERA_HEIGHT, playerTranslation.z);
-    camera.position.copy(CAMERA_POS);
+    if (gameMode === 'FENCING') {
+      CAMERA_POS.set(playerTranslation.x, playerTranslation.y + CAMERA_HEIGHT, playerTranslation.z);
+      camera.position.copy(CAMERA_POS);
+    }
 
     camera.getWorldDirection(FORWARD);
     FORWARD.y = 0;
@@ -337,13 +539,34 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
       if (MOVE.lengthSq() > 0) MOVE.normalize().multiplyScalar(gameMode === 'ROAMING' ? ROAM_SPEED : FENCE_SPEED);
 
       playerActionRef.current.motionLock = Math.max(playerActionRef.current.motionLock - dt, 0);
-      playerBody.setLinvel({ x: MOVE.x, y: playerVelocity.y, z: playerActionRef.current.motionLock > 0 ? playerVelocity.z : MOVE.z }, true);
+      playerBody.setLinvel(
+        {
+          x: MOVE.x,
+          y: playerVelocity.y,
+          z: playerActionRef.current.motionLock > 0 ? playerVelocity.z : MOVE.z,
+        },
+        true,
+      );
 
       if (gameMode === 'ROAMING') {
-        playerBody.setTranslation({ x: clamp(playerTranslation.x, -HALL_LIMIT, HALL_LIMIT), y: playerTranslation.y, z: clamp(playerTranslation.z, -HALL_LIMIT, HALL_LIMIT) }, true);
+        playerBody.setTranslation(
+          {
+            x: clamp(playerTranslation.x, -HALL_LIMIT, HALL_LIMIT),
+            y: playerTranslation.y,
+            z: clamp(playerTranslation.z, -HALL_LIMIT, HALL_LIMIT),
+          },
+          true,
+        );
         opponentBody.setLinvel(ZERO, true);
       } else {
-        playerBody.setTranslation({ x: clamp(playerTranslation.x, -PISTE_HALF_WIDTH, PISTE_HALF_WIDTH), y: playerTranslation.y, z: clamp(playerTranslation.z, -PISTE_HALF_LENGTH, PISTE_HALF_LENGTH) }, true);
+        playerBody.setTranslation(
+          {
+            x: clamp(playerTranslation.x, -PISTE_HALF_WIDTH, PISTE_HALF_WIDTH),
+            y: playerTranslation.y,
+            z: clamp(playerTranslation.z, -PISTE_HALF_LENGTH, PISTE_HALF_LENGTH),
+          },
+          true,
+        );
 
         aiRef.current.attackCooldown -= dt;
         aiRef.current.strafeTimer -= dt;
@@ -355,7 +578,11 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
           aiRef.current.strafeTimer = 0.7 + Math.random() * 1.1;
           aiRef.current.strafeDirection *= -1;
         }
-        if (Math.abs(dz) < 2.25 && Math.random() < 0.012) opponentActionRef.current.parry = 1;
+
+        if (Math.abs(dz) < 2.25 && Math.random() < 0.012) {
+          opponentActionRef.current.parry = 1;
+        }
+
         if (aiRef.current.attackCooldown <= 0 && Math.abs(dz) < 3.25) {
           aiRef.current.attackCooldown = 1 + Math.random() * 1.15;
           opponentActionRef.current.thrust = 1;
@@ -363,8 +590,22 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
           opponentBody.applyImpulse({ x: 0, y: 0, z: 2.1 }, true);
         }
 
-        opponentBody.setLinvel({ x: clamp(dx * 1.15 + aiRef.current.strafeDirection * 0.32, -0.78, 0.78) * AI_SPEED, y: opponentVelocity.y, z: aiRef.current.motionLock > 0 ? opponentVelocity.z : clamp(dz - 3.05, -1, 1) * AI_SPEED }, true);
-        opponentBody.setTranslation({ x: clamp(opponentTranslation.x, -PISTE_HALF_WIDTH, PISTE_HALF_WIDTH), y: opponentTranslation.y, z: clamp(opponentTranslation.z, -PISTE_HALF_LENGTH, PISTE_HALF_LENGTH) }, true);
+        opponentBody.setLinvel(
+          {
+            x: clamp(dx * 1.15 + aiRef.current.strafeDirection * 0.32, -0.78, 0.78) * AI_SPEED,
+            y: opponentVelocity.y,
+            z: aiRef.current.motionLock > 0 ? opponentVelocity.z : clamp(dz - 3.05, -1, 1) * AI_SPEED,
+          },
+          true,
+        );
+        opponentBody.setTranslation(
+          {
+            x: clamp(opponentTranslation.x, -PISTE_HALF_WIDTH, PISTE_HALF_WIDTH),
+            y: opponentTranslation.y,
+            z: clamp(opponentTranslation.z, -PISTE_HALF_LENGTH, PISTE_HALF_LENGTH),
+          },
+          true,
+        );
       }
     } else {
       playerBody.setLinvel(ZERO, true);
@@ -379,11 +620,8 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
     const thrustOffset = Math.sin((1 - playerActionRef.current.thrust) * Math.PI) * 0.9;
     const parryOffset = Math.sin((1 - playerActionRef.current.parry) * Math.PI) * 0.72;
     const targetYaw = gameMode === 'FENCING' ? clamp(mouseAimRef.current.x, -0.65, 0.65) : 0.12;
-    const targetPitch = gameMode === 'FENCING' ? clamp(mouseAimRef.current.y, -0.42, 0.3) : -0.08;
 
-    // 鼠标输入被换算成 aim 偏移，再映射到剑的偏航和俯仰角。
-    // React 在这里负责把输入翻译为角度，Rapier 则继续负责身体与场景的碰撞运动。
-    playerSword.rotation.x = THREE.MathUtils.lerp(playerSword.rotation.x, targetPitch + parryOffset * 0.16, 0.18);
+    // 姒х姵鐖ｆ潏鎾冲弳閸忓牆褰夐幋?aim 閸嬪繒些閿涘苯鍟€閺勭姴鐨犻崚鏉垮ⅳ閻ㄥ嫬浜搁懜顏勬嫲娣囶垯璇濈憴鎺嬧偓?    // 鏉╂瑦鐗卞В鏃囩濡€崇础娑撳妫︽穱婵堟殌缁楊兛绔存禍铏剐炵憴鍡欏殠閿涘苯寮甸懗鍊燁唨閸撴垵鐨风捄鐔兼閹靛鍎撮惉鍕櫙閺傜懓鎮滅粔璇插З閵?    playerSword.rotation.x = THREE.MathUtils.lerp(playerSword.rotation.x, targetPitch + parryOffset * 0.16, 0.18);
     playerSword.rotation.y = THREE.MathUtils.lerp(playerSword.rotation.y, targetYaw + parryOffset * 0.8, 0.18);
     playerSword.rotation.z = THREE.MathUtils.lerp(playerSword.rotation.z, -parryOffset * 0.48, 0.18);
     playerSword.position.x = THREE.MathUtils.lerp(playerSword.position.x, 0.24 + parryOffset * 0.22, 0.18);
@@ -399,7 +637,13 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
     opponentSword.position.x = THREE.MathUtils.lerp(opponentSword.position.x, 0.22 - enemyParry * 0.2, 0.16);
     opponentSword.position.z = THREE.MathUtils.lerp(opponentSword.position.z, 0.12 + enemyThrust, 0.18);
 
-    if (gameMode === 'FENCING') {
+    if (gameMode === 'ROAMING') {
+      if (orbit) {
+        LOOK_AT.set(playerTranslation.x, playerTranslation.y + 0.75, playerTranslation.z);
+        orbit.target.lerp(LOOK_AT, 0.18);
+        orbit.update();
+      }
+    } else {
       LOOK_AT.set(opponentTranslation.x, opponentTranslation.y + 0.55, opponentTranslation.z);
       camera.lookAt(LOOK_AT);
     }
@@ -408,14 +652,18 @@ function SceneSystem({ gameMode, gameState, playerBodyRef, opponentBodyRef, play
   return null;
 }
 
-// 5. 主组件 RealFencing (包含 Canvas 和物理世界)
+// 5. 娑撹崵绮嶆禒?RealFencing (閸栧懎鎯?Canvas 閸滃瞼澧块悶鍡曠瑯閻?
 export default function RealFencing() {
   const [gameMode, setGameMode] = useState('ROAMING');
   const [gameState, setGameState] = useState('PLAYING');
   const [score, setScore] = useState({ player: 0, opponent: 0 });
+  const [timeLeft, setTimeLeft] = useState(ROUND_DURATION_SECONDS);
   const [pointerLocked, setPointerLocked] = useState(false);
+  const [hitLights, setHitLights] = useState(EMPTY_LIGHTS);
+  const [penaltyCards, setPenaltyCards] = useState(EMPTY_CARDS);
 
   const containerRef = useRef(null);
+  const orbitRef = useRef(null);
   const playerBodyRef = useRef(null);
   const opponentBodyRef = useRef(null);
   const playerSwordRef = useRef(null);
@@ -431,6 +679,7 @@ export default function RealFencing() {
   const lastHitRef = useRef({ time: null, characterId: null });
   const pendingHitTimerRef = useRef(null);
   const resetTimerRef = useRef(null);
+  const lightTimerRef = useRef(null);
 
   useEffect(() => {
     gameModeRef.current = gameMode;
@@ -440,18 +689,46 @@ export default function RealFencing() {
     gameStateRef.current = gameState;
   }, [gameState]);
 
+  const clearLightTimer = useCallback(() => {
+    if (lightTimerRef.current) {
+      window.clearTimeout(lightTimerRef.current);
+      lightTimerRef.current = null;
+    }
+  }, []);
+
   const clearTimers = useCallback(() => {
     if (pendingHitTimerRef.current) window.clearTimeout(pendingHitTimerRef.current);
     if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
     pendingHitTimerRef.current = null;
     resetTimerRef.current = null;
-  }, []);
+    clearLightTimer();
+  }, [clearLightTimer]);
+
+  const flashLights = useCallback(
+    (winner) => {
+      clearLightTimer();
+      setHitLights({
+        player: winner === 'player' || winner === 'double',
+        opponent: winner === 'opponent' || winner === 'double',
+      });
+      lightTimerRef.current = window.setTimeout(() => {
+        setHitLights(EMPTY_LIGHTS);
+        lightTimerRef.current = null;
+      }, LIGHT_DURATION_MS);
+    },
+    [clearLightTimer],
+  );
 
   const resetForMode = useCallback((mode) => {
     mouseAimRef.current = { x: 0, y: 0 };
     playerActionRef.current = { thrust: 0, parry: 0, motionLock: 0 };
     opponentActionRef.current = { thrust: 0, parry: 0 };
-    aiRef.current = { attackCooldown: 1 + Math.random() * 0.6, strafeTimer: 0.8 + Math.random() * 0.5, strafeDirection: 1, motionLock: 0 };
+    aiRef.current = {
+      attackCooldown: 1 + Math.random() * 0.6,
+      strafeTimer: 0.8 + Math.random() * 0.5,
+      strafeDirection: 1,
+      motionLock: 0,
+    };
     resetBody(playerBodyRef.current, mode === 'ROAMING' ? ROAMING_SPAWN : PLAYER_SPAWN);
     resetBody(opponentBodyRef.current, OPPONENT_SPAWN);
   }, []);
@@ -460,50 +737,71 @@ export default function RealFencing() {
     clearTimers();
     lastHitRef.current = { time: null, characterId: null };
     roundResolvedRef.current = false;
+    setHitLights(EMPTY_LIGHTS);
     gameStateRef.current = 'PLAYING';
     setGameState('PLAYING');
     resetForMode(gameModeRef.current);
   }, [clearTimers, resetForMode]);
 
-  const finalizeScore = useCallback((winner) => {
-    if (roundResolvedRef.current) return;
-    roundResolvedRef.current = true;
-    clearTimers();
-    setScore((previous) => ({
-      player: previous.player + (winner === 'player' || winner === 'double' ? 1 : 0),
-      opponent: previous.opponent + (winner === 'opponent' || winner === 'double' ? 1 : 0),
-    }));
-    gameStateRef.current = 'HALTED';
-    setGameState('HALTED');
-    resetTimerRef.current = window.setTimeout(resetRound, HALT_MS);
-  }, [clearTimers, resetRound]);
+  const restartMatch = useCallback(() => {
+    setScore({ player: 0, opponent: 0 });
+    setTimeLeft(ROUND_DURATION_SECONDS);
+    setHitLights(EMPTY_LIGHTS);
+    setPenaltyCards(EMPTY_CARDS);
+    resetRound();
+  }, [resetRound]);
 
-  const registerHit = useCallback((hitBy) => {
-    if (gameModeRef.current !== 'FENCING' || gameStateRef.current !== 'PLAYING' || roundResolvedRef.current) return;
-    const now = performance.now();
+  const finalizeScore = useCallback(
+    (winner) => {
+      if (roundResolvedRef.current) return;
+      roundResolvedRef.current = true;
+      clearTimers();
+      flashLights(winner);
+      setScore((previous) => ({
+        player: previous.player + (winner === 'player' || winner === 'double' ? 1 : 0),
+        opponent: previous.opponent + (winner === 'opponent' || winner === 'double' ? 1 : 0),
+      }));
+      gameStateRef.current = 'HALTED';
+      setGameState('HALTED');
+      resetTimerRef.current = window.setTimeout(resetRound, HALT_MS);
+    },
+    [clearTimers, flashLights, resetRound],
+  );
 
-    // 第一击先记时间和出手方，短暂等待 40ms。
-    // 如果另一侧在窗口内也命中，则判互中；否则把分数判给第一击的一方。
-    if (lastHitRef.current.time === null) {
-      lastHitRef.current = { time: now, characterId: hitBy };
-      pendingHitTimerRef.current = window.setTimeout(() => {
-        if (!roundResolvedRef.current && lastHitRef.current.time !== null) {
-          finalizeScore(lastHitRef.current.characterId);
-        }
-      }, HIT_WINDOW_MS + 5);
-      return;
+  const registerHit = useCallback(
+    (hitBy) => {
+      if (gameModeRef.current !== 'FENCING' || gameStateRef.current !== 'PLAYING' || roundResolvedRef.current) return;
+      const now = performance.now();
+
+      // Record the first touch and wait briefly for a possible counter-hit.
+      // If the opponent also lands within 40ms, resolve it as a double touch.
+      if (lastHitRef.current.time === null) {
+        lastHitRef.current = { time: now, characterId: hitBy };
+        pendingHitTimerRef.current = window.setTimeout(() => {
+          if (!roundResolvedRef.current && lastHitRef.current.time !== null) {
+            finalizeScore(lastHitRef.current.characterId);
+          }
+        }, HIT_WINDOW_MS + 5);
+        return;
+      }
+
+      if (lastHitRef.current.characterId === hitBy) return;
+      if (now - lastHitRef.current.time <= HIT_WINDOW_MS) finalizeScore('double');
+      else finalizeScore(lastHitRef.current.characterId);
+    },
+    [finalizeScore],
+  );
+
+  const handleModeChange = useCallback(() => {
+    const nextMode = gameModeRef.current === 'ROAMING' ? 'FENCING' : 'ROAMING';
+    if (document.pointerLockElement && nextMode === 'ROAMING') {
+      document.exitPointerLock?.();
     }
-
-    if (lastHitRef.current.characterId === hitBy) return;
-    if (now - lastHitRef.current.time <= HIT_WINDOW_MS) finalizeScore('double');
-    else finalizeScore(lastHitRef.current.characterId);
-  }, [finalizeScore]);
-
-  const handleModeChange = useCallback((nextMode) => {
     keysRef.current = {};
     clearTimers();
     lastHitRef.current = { time: null, characterId: null };
     roundResolvedRef.current = false;
+    setHitLights(EMPTY_LIGHTS);
     gameModeRef.current = nextMode;
     gameStateRef.current = 'PLAYING';
     setGameMode(nextMode);
@@ -511,15 +809,25 @@ export default function RealFencing() {
     resetForMode(nextMode);
   }, [clearTimers, resetForMode]);
 
-  const handlePlayerTipEnter = useCallback((event) => {
-    const otherId = event.other?.colliderObject?.userData?.characterId ?? event.other?.rigidBodyObject?.userData?.characterId;
-    if (otherId === 'opponent') registerHit('player');
-  }, [registerHit]);
+  const handlePlayerTipEnter = useCallback(
+    (event) => {
+      const otherId =
+        event.other?.colliderObject?.userData?.characterId ??
+        event.other?.rigidBodyObject?.userData?.characterId;
+      if (otherId === 'opponent') registerHit('player');
+    },
+    [registerHit],
+  );
 
-  const handleOpponentTipEnter = useCallback((event) => {
-    const otherId = event.other?.colliderObject?.userData?.characterId ?? event.other?.rigidBodyObject?.userData?.characterId;
-    if (otherId === 'player') registerHit('opponent');
-  }, [registerHit]);
+  const handleOpponentTipEnter = useCallback(
+    (event) => {
+      const otherId =
+        event.other?.colliderObject?.userData?.characterId ??
+        event.other?.rigidBodyObject?.userData?.characterId;
+      if (otherId === 'player') registerHit('opponent');
+    },
+    [registerHit],
+  );
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -570,6 +878,21 @@ export default function RealFencing() {
   }, []);
 
   useEffect(() => {
+    if (gameMode !== 'FENCING' || gameState !== 'PLAYING' || timeLeft <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setTimeLeft((previous) => {
+        if (previous <= 1) {
+          gameStateRef.current = 'HALTED';
+          setGameState('HALTED');
+          return 0;
+        }
+        return previous - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [gameMode, gameState, timeLeft]);
+
+  useEffect(() => {
     resetForMode('ROAMING');
     return () => clearTimers();
   }, [clearTimers, resetForMode]);
@@ -579,14 +902,42 @@ export default function RealFencing() {
       ref={containerRef}
       className="relative w-full h-[75vh] min-h-[600px] rounded-xl overflow-hidden border border-stone-300/70 bg-[radial-gradient(circle_at_top,#fffaf2_0%,#eadfcd_60%,#d7c4ad_100%)] shadow-2xl"
     >
+      <FloatingToolbar
+        gameMode={gameMode}
+        gameState={gameState}
+        score={score}
+        timeLeft={timeLeft}
+        hitLights={hitLights}
+        penaltyCards={penaltyCards}
+        pointerLocked={pointerLocked}
+        onModeChange={handleModeChange}
+        onRestart={restartMatch}
+      />
+      {gameMode === 'FENCING' && <HelmetMask />}
+
       <div className="absolute inset-0">
-        <Canvas className="h-full w-full" shadows dpr={[1, 1.7]} camera={{ position: [0, 1.7, 5], fov: 70, near: 0.1, far: 120 }}>
+        <Canvas
+          className="h-full w-full"
+          shadows
+          dpr={[1, 1.7]}
+          camera={{ position: [0, 1.7, 5], fov: 70, near: 0.1, far: 120 }}
+        >
           <fog attach="fog" args={['#efe5d7', 10, 34]} />
-          <UIOverlay gameMode={gameMode} gameState={gameState} score={score} pointerLocked={pointerLocked} onModeChange={handleModeChange} />
-          {gameMode === 'FENCING' && <HelmetMask />}
           <Suspense fallback={null}>
             <Environment preset="sunset" background blur={0.05} />
           </Suspense>
+
+          <OrbitControls
+            ref={orbitRef}
+            enabled={gameMode === 'ROAMING'}
+            enablePan={false}
+            enableDamping
+            dampingFactor={0.08}
+            minDistance={3.6}
+            maxDistance={7.5}
+            minPolarAngle={0.75}
+            maxPolarAngle={1.35}
+          />
 
           <Physics gravity={[0, -9.81, 0]}>
             <RigidBody type="fixed" colliders={false}>
@@ -599,12 +950,43 @@ export default function RealFencing() {
 
             <RealisticCastle />
             <Piste />
-            <Fencer bodyRef={playerBodyRef} swordRef={playerSwordRef} colliderName="player-body" onTipEnter={handlePlayerTipEnter} position={[PLAYER_SPAWN.x, PLAYER_SPAWN.y, PLAYER_SPAWN.z]} facingRotation={Math.PI} bodyVisible={gameMode !== 'FENCING'} isPlayer />
-            <Fencer bodyRef={opponentBodyRef} swordRef={opponentSwordRef} colliderName="opponent-body" onTipEnter={handleOpponentTipEnter} position={[OPPONENT_SPAWN.x, OPPONENT_SPAWN.y, OPPONENT_SPAWN.z]} facingRotation={0} bodyVisible isPlayer={false} />
+            <Fencer
+              bodyRef={playerBodyRef}
+              swordRef={playerSwordRef}
+              colliderName="player-body"
+              onTipEnter={handlePlayerTipEnter}
+              position={[PLAYER_SPAWN.x, PLAYER_SPAWN.y, PLAYER_SPAWN.z]}
+              facingRotation={Math.PI}
+              bodyVisible={gameMode !== 'FENCING'}
+              isPlayer
+            />
+            <Fencer
+              bodyRef={opponentBodyRef}
+              swordRef={opponentSwordRef}
+              colliderName="opponent-body"
+              onTipEnter={handleOpponentTipEnter}
+              position={[OPPONENT_SPAWN.x, OPPONENT_SPAWN.y, OPPONENT_SPAWN.z]}
+              facingRotation={0}
+              bodyVisible
+              isPlayer={false}
+            />
           </Physics>
 
-          <SceneSystem gameMode={gameMode} gameState={gameState} playerBodyRef={playerBodyRef} opponentBodyRef={opponentBodyRef} playerSwordRef={playerSwordRef} opponentSwordRef={opponentSwordRef} keysRef={keysRef} mouseAimRef={mouseAimRef} playerActionRef={playerActionRef} opponentActionRef={opponentActionRef} aiRef={aiRef} />
-          <PointerLockControls selector="#fencing-lock-button" />
+          <SceneSystem
+            gameMode={gameMode}
+            gameState={gameState}
+            playerBodyRef={playerBodyRef}
+            opponentBodyRef={opponentBodyRef}
+            playerSwordRef={playerSwordRef}
+            opponentSwordRef={opponentSwordRef}
+            keysRef={keysRef}
+            mouseAimRef={mouseAimRef}
+            playerActionRef={playerActionRef}
+            opponentActionRef={opponentActionRef}
+            aiRef={aiRef}
+            orbitRef={orbitRef}
+          />
+          {gameMode === 'FENCING' && <PointerLockControls selector="#fencing-lock-button" />}
         </Canvas>
       </div>
     </div>
