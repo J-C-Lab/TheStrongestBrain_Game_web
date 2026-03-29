@@ -19,11 +19,15 @@ const REST_DURATION_SECONDS = 60;
 const LIGHT_DURATION_MS = 2000;
 const DOUBLE_HIT_WINDOW_MS = 40;
 
-const PLAYER_START = [0, 1.02, 2];
-const OPPONENT_START = [0, 1.02, -2];
+const FENCER_GROUND_Y = -0.16;
+const PLAYER_START = [0, FENCER_GROUND_Y, 2];
+const OPPONENT_START = [0, FENCER_GROUND_Y, -2];
 
 const PLAYER_FACING_Y = Math.PI;
 const OPPONENT_FACING_Y = 0;
+const FIRST_PERSON_CAMERA_Y = 1.86;
+const LOOK_TARGET_Y = 1.72;
+const THIRD_PERSON_TARGET_Y = 1.2;
 
 const ROAM_SPEED = 3.8;
 const FENCING_SPEED = 2.4;
@@ -135,9 +139,9 @@ function FloatingToolbar({
       : 'Live Bout';
 
   return (
-    <div className="pointer-events-none absolute top-[10px] left-0 z-20 w-full px-4">
-      <div className="pointer-events-auto relative flex items-center justify-between rounded-xl border border-white/10 bg-stone-900/60 p-3 text-stone-100 shadow-2xl backdrop-blur-md">
-        <div className="flex flex-1 items-center">
+    <div className="absolute top-[10px] left-0 z-20 w-full px-4">
+      <div className="relative flex items-center justify-between rounded-xl border border-white/10 bg-stone-900/60 p-3 text-stone-100 shadow-2xl backdrop-blur-md">
+        <div className="pointer-events-none flex flex-1 items-center">
           <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] tracking-[0.2em] text-stone-200/85 uppercase">
             <div>{modeLabel}</div>
             <div className="mt-0.5 text-[10px] tracking-[0.28em] text-stone-400">
@@ -146,7 +150,7 @@ function FloatingToolbar({
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-6">
+        <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-6">
           <PenaltyStrip cards={penalties.player} />
           <LightDot color={hitLights.player} />
 
@@ -166,25 +170,25 @@ function FloatingToolbar({
           <PenaltyStrip cards={penalties.opponent} />
         </div>
 
-        <div className="flex flex-1 justify-end gap-3">
+        <div className="pointer-events-auto relative z-10 flex flex-1 justify-end gap-3">
           <button
             type="button"
             onClick={onRestart}
-            className="rounded-md bg-white/10 px-3 py-1 text-xs text-stone-100 transition hover:bg-white/20"
+            className="pointer-events-auto cursor-pointer rounded-md bg-white/10 px-3 py-1 text-xs text-stone-100 transition hover:bg-white/20"
           >
             Restart
           </button>
           <button
             type="button"
             onClick={onToggleMode}
-            className="rounded-md bg-white/10 px-3 py-1 text-xs text-stone-100 transition hover:bg-white/20"
+            className="pointer-events-auto cursor-pointer rounded-md bg-white/10 px-3 py-1 text-xs text-stone-100 transition hover:bg-white/20"
           >
             {gameMode === 'FENCING' ? 'Back To Roam' : 'Enter First-Person'}
           </button>
           <button
             type="button"
             onClick={onOpenSettings}
-            className="rounded-md bg-white/10 px-3 py-1 text-xs text-stone-100 transition hover:bg-white/20"
+            className="pointer-events-auto cursor-pointer rounded-md bg-white/10 px-3 py-1 text-xs text-stone-100 transition hover:bg-white/20"
           >
             Settings
           </button>
@@ -259,8 +263,14 @@ function SettingsModal({
   if (!open) return null;
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-stone-950/35 p-6 backdrop-blur-sm">
-      <div className="w-full max-w-5xl overflow-hidden rounded-3xl border border-white/15 bg-white/10 shadow-[0_20px_80px_rgba(15,10,5,0.45)] backdrop-blur-xl">
+    <div
+      className="pointer-events-auto fixed inset-0 z-[999] flex items-center justify-center bg-stone-950/35 p-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-5xl overflow-hidden rounded-3xl border border-white/15 bg-white/10 shadow-[0_20px_80px_rgba(15,10,5,0.45)] backdrop-blur-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex min-h-[540px]">
           <aside className="w-56 border-r border-white/10 bg-stone-950/25 p-5">
             <div className="font-serif text-2xl text-stone-50">Settings</div>
@@ -784,11 +794,19 @@ function SceneSystem({
     const opponentPosition = opponentBody.translation();
 
     if (gameMode === 'FENCING') {
-      camera.position.set(playerPosition.x, playerPosition.y + 0.7, playerPosition.z);
-      camera.lookAt(opponentPosition.x, opponentPosition.y + 0.7, opponentPosition.z);
+      camera.position.set(
+        playerPosition.x,
+        playerPosition.y + FIRST_PERSON_CAMERA_Y,
+        playerPosition.z,
+      );
+      camera.lookAt(
+        opponentPosition.x,
+        opponentPosition.y + LOOK_TARGET_Y,
+        opponentPosition.z,
+      );
     } else {
       camera.position.set(playerPosition.x + 4.8, 3.6, playerPosition.z + 5.4);
-      camera.lookAt(playerPosition.x, playerPosition.y + 1.2, playerPosition.z);
+      camera.lookAt(playerPosition.x, playerPosition.y + THIRD_PERSON_TARGET_Y, playerPosition.z);
     }
   }, [camera, gameMode, playerBodyRef, opponentBodyRef]);
 
@@ -840,6 +858,9 @@ function SceneSystem({
       moveZ /= moveLength;
 
       const currentVelocity = playerBody.linvel();
+      if (!isSettingsOpen && (moveX !== 0 || moveZ !== 0)) {
+        playerBody.wakeUp();
+      }
       playerBody.setLinvel(
         {
           x: isSettingsOpen ? 0 : moveX * ROAM_SPEED,
@@ -859,7 +880,11 @@ function SceneSystem({
       }
 
       if (orbitRef.current) {
-        orbitRef.current.target.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
+        orbitRef.current.target.set(
+          playerPosition.x,
+          playerPosition.y + THIRD_PERSON_TARGET_Y,
+          playerPosition.z,
+        );
         orbitRef.current.update();
       }
     } else {
@@ -876,6 +901,9 @@ function SceneSystem({
       axisZ /= axisLength;
 
       const currentVelocity = playerBody.linvel();
+      if (!inputLocked && (axisX !== 0 || axisZ !== 0)) {
+        playerBody.wakeUp();
+      }
       playerBody.setLinvel(
         {
           x: inputLocked ? 0 : axisX * FENCING_SPEED,
@@ -894,7 +922,11 @@ function SceneSystem({
         );
       }
 
-      camera.position.set(playerPosition.x, playerPosition.y + 0.7, playerPosition.z);
+      camera.position.set(
+        playerPosition.x,
+        playerPosition.y + FIRST_PERSON_CAMERA_Y,
+        playerPosition.z,
+      );
     }
 
     const elapsed = clock.getElapsedTime();
@@ -911,7 +943,7 @@ function SceneSystem({
 
       opponentBody.setNextKinematicTranslation({
         x: nextOpponentX,
-        y: opponentPosition.y,
+        y: FENCER_GROUND_Y,
         z: nextOpponentZ,
       });
 
@@ -978,7 +1010,7 @@ function SceneSystem({
 
       TEMP_LOOK_TARGET.set(
         playerPosition.x - opponentPosition.x,
-        (playerPosition.y + 0.5) - (opponentPosition.y + 0.6),
+        (playerPosition.y + LOOK_TARGET_Y) - (opponentPosition.y + LOOK_TARGET_Y),
         playerPosition.z - opponentPosition.z,
       );
 
@@ -987,7 +1019,8 @@ function SceneSystem({
 
       opponentSwordRef.current.rotation.x = -0.12 + targetPitch;
       opponentSwordRef.current.rotation.y = targetYaw;
-      opponentSwordRef.current.rotation.z = opponentParrySweep;      opponentSwordRef.current.position.z = 0.46 + opponentThrustOffset;
+      opponentSwordRef.current.rotation.z = opponentParrySweep;
+      opponentSwordRef.current.position.z = 0.46 + opponentThrustOffset;
     }
   });
 
@@ -1001,7 +1034,7 @@ function SceneSystem({
       maxDistance={10}
     />
   ) : (
-    <PointerLockControls />
+    <PointerLockControls selector="#real-fencing-canvas" />
   );
 }
 
@@ -1010,6 +1043,10 @@ export default function RealFencing() {
   const opponentBodyRef = useRef(null);
   const playerSwordRef = useRef(null);
   const opponentSwordRef = useRef(null);
+  const gameModeRef = useRef('ROAMING');
+  const gameStateRef = useRef('PLAYING');
+  const isRestingRef = useRef(false);
+  const isSettingsOpenRef = useRef(false);
 
   const keysRef = useRef({});
   const aimRef = useRef({ x: 0, y: 0 });
@@ -1057,6 +1094,13 @@ export default function RealFencing() {
 
   useEffect(() => {
     latestStateRef.current = { gameMode, gameState, isResting, isSettingsOpen };
+  }, [gameMode, gameState, isResting, isSettingsOpen]);
+
+  useEffect(() => {
+    gameModeRef.current = gameMode;
+    gameStateRef.current = gameState;
+    isRestingRef.current = isResting;
+    isSettingsOpenRef.current = isSettingsOpen;
   }, [gameMode, gameState, isResting, isSettingsOpen]);
 
   const clearPendingHit = useCallback(() => {
@@ -1243,43 +1287,54 @@ export default function RealFencing() {
     });
   }, [resetFencers]);
 
+  const handleOpenSettings = useCallback(() => {
+    console.log('Settings Button Clicked!');
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    setIsSettingsOpen(true);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event) => {
       keysRef.current[event.code] = true;
+      console.log('按键触发:', event.code, '当前模式:', gameModeRef.current);
 
-      const current = latestStateRef.current;
-      if (current.isSettingsOpen) return;
+      if (isSettingsOpenRef.current) return;
 
       if (event.code === 'Space') {
         event.preventDefault();
       }
 
-      if (
-        current.gameMode === 'FENCING' &&
-        current.gameState === 'PLAYING' &&
-        !current.isResting
-      ) {
-        if (event.code === 'Space' && !event.repeat) {
-          playerBodyRef.current?.applyImpulse(
-            { x: 0, y: 0, z: -PLAYER_LUNGE_IMPULSE },
-            true,
-          );
-        }
+      if (gameModeRef.current !== 'FENCING') return;
+      if (gameStateRef.current !== 'PLAYING') return;
+      if (isRestingRef.current) return;
 
-        if (event.code === 'Enter' && !event.repeat) {
-          playerBodyRef.current?.applyImpulse(
-            { x: 0, y: 0, z: -PLAYER_DASH_IMPULSE },
-            true,
-          );
-        }
+      const playerRigidBody = playerBodyRef.current;
+      if (!playerRigidBody) return;
 
-        if (event.code === 'KeyJ' && !event.repeat) {
-          playerActionRef.current.thrustTime = THRUST_DURATION;
-        }
+      if (event.code === 'Space' && !event.repeat) {
+        playerRigidBody.wakeUp();
+        playerRigidBody.applyImpulse(
+          { x: 0, y: 0, z: -PLAYER_LUNGE_IMPULSE },
+          true,
+        );
+      }
 
-        if (event.code === 'KeyK' && !event.repeat) {
-          playerActionRef.current.parryTime = PARRY_DURATION;
-        }
+      if (event.code === 'Enter' && !event.repeat) {
+        playerRigidBody.wakeUp();
+        playerRigidBody.applyImpulse(
+          { x: 0, y: 0, z: -PLAYER_DASH_IMPULSE },
+          true,
+        );
+      }
+
+      if (event.code === 'KeyJ' && !event.repeat) {
+        playerActionRef.current.thrustTime = THRUST_DURATION;
+      }
+
+      if (event.code === 'KeyK' && !event.repeat) {
+        playerActionRef.current.parryTime = PARRY_DURATION;
       }
     };
 
@@ -1288,7 +1343,8 @@ export default function RealFencing() {
     };
 
     const handleMouseMove = (event) => {
-      if (latestStateRef.current.gameMode !== 'FENCING') return;
+      if (gameModeRef.current !== 'FENCING') return;
+      if (isSettingsOpenRef.current) return;
 
       if (document.pointerLockElement) {
         aimRef.current.x = clamp(aimRef.current.x + event.movementX * 0.0025, -0.55, 0.55);
@@ -1375,7 +1431,7 @@ export default function RealFencing() {
         penalties={penalties}
         onRestart={handleRestart}
         onToggleMode={handleToggleMode}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={handleOpenSettings}
       />
 
       <HelmetMask visible={gameMode === 'FENCING'} />
@@ -1395,57 +1451,59 @@ export default function RealFencing() {
         }
       />
 
-      <Canvas
-        shadows
-        camera={{ position: [4.8, 3.6, 5.6], fov: 52, near: 0.1, far: 100 }}
-        gl={{ antialias: true }}
-      >
-        <Physics gravity={[0, -9.81, 0]} debug>
-          <RealisticCastle />
-          <Piste />
+      <div id="real-fencing-canvas" className="h-full w-full">
+        <Canvas
+          shadows
+          camera={{ position: [4.8, 3.6, 5.6], fov: 52, near: 0.1, far: 100 }}
+          gl={{ antialias: true }}
+        >
+          <Physics gravity={[0, -9.81, 0]} debug>
+            <RealisticCastle />
+            <Piste />
 
-          <Fencer
-            id="player"
-            type="dynamic"
-            position={PLAYER_START}
-            facingY={PLAYER_FACING_Y}
-            bodyRef={playerBodyRef}
-            swordRef={playerSwordRef}
-            color={matchSettings.uniformColor}
-            handedness={matchSettings.handedness}
-            onTipIntersection={handlePlayerTipEnter}
-            hideBody={gameMode === 'FENCING'}
-          />
+            <Fencer
+              id="player"
+              type="dynamic"
+              position={PLAYER_START}
+              facingY={PLAYER_FACING_Y}
+              bodyRef={playerBodyRef}
+              swordRef={playerSwordRef}
+              color={matchSettings.uniformColor}
+              handedness={matchSettings.handedness}
+              onTipIntersection={handlePlayerTipEnter}
+              hideBody={gameMode === 'FENCING'}
+            />
 
-          <Fencer
-            id="opponent"
-            type="kinematicPosition"
-            position={OPPONENT_START}
-            facingY={OPPONENT_FACING_Y}
-            bodyRef={opponentBodyRef}
-            swordRef={opponentSwordRef}
-            color="#ffffff"
-            handedness="left"
-            onTipIntersection={handleOpponentTipEnter}
-            hideBody={false}
-          />
+            <Fencer
+              id="opponent"
+              type="kinematicPosition"
+              position={OPPONENT_START}
+              facingY={OPPONENT_FACING_Y}
+              bodyRef={opponentBodyRef}
+              swordRef={opponentSwordRef}
+              color="#ffffff"
+              handedness="left"
+              onTipIntersection={handleOpponentTipEnter}
+              hideBody={false}
+            />
 
-          <SceneSystem
-            gameMode={gameMode}
-            gameState={gameState}
-            isResting={isResting}
-            isSettingsOpen={isSettingsOpen}
-            keysRef={keysRef}
-            aimRef={aimRef}
-            playerActionRef={playerActionRef}
-            opponentActionRef={opponentActionRef}
-            playerBodyRef={playerBodyRef}
-            opponentBodyRef={opponentBodyRef}
-            playerSwordRef={playerSwordRef}
-            opponentSwordRef={opponentSwordRef}
-          />
-        </Physics>
-      </Canvas>
+            <SceneSystem
+              gameMode={gameMode}
+              gameState={gameState}
+              isResting={isResting}
+              isSettingsOpen={isSettingsOpen}
+              keysRef={keysRef}
+              aimRef={aimRef}
+              playerActionRef={playerActionRef}
+              opponentActionRef={opponentActionRef}
+              playerBodyRef={playerBodyRef}
+              opponentBodyRef={opponentBodyRef}
+              playerSwordRef={playerSwordRef}
+              opponentSwordRef={opponentSwordRef}
+            />
+          </Physics>
+        </Canvas>
+      </div>
     </div>
   );
 }
