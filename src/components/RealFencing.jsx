@@ -51,15 +51,18 @@ function resetBody(body, spawn) {
 
 // 1. UI 闁喚鍍电紒鍕
 function LightDot({ active, colorClass }) {
-  return <div className={`h-3.5 w-3.5 rounded-full border border-white/40 ${active ? colorClass : 'bg-white/10'}`} />;
-}
-
-function PenaltyStrip({ label, active, className }) {
   return (
     <div
-      className={`h-6 w-4 rounded-sm border border-white/40 shadow ${active ? className : 'bg-white/10'}`}
-      title={label}
+      className={`h-6 w-6 rounded-full border-2 border-stone-500 ${
+        active ? colorClass : 'bg-white/10'
+      }`}
     />
+  );
+}
+
+function PenaltyStrip({ active, className }) {
+  return (
+    <div className={`h-4 w-2 rounded-sm ${className} ${active ? 'opacity-100' : 'opacity-20'}`} />
   );
 }
 
@@ -74,114 +77,68 @@ function FloatingToolbar({
   onModeChange,
   onRestart,
 }) {
-  const toggleLabel = gameMode === 'ROAMING' ? 'Roaming -> Start Match' : 'Fencing -> Back To Roam';
+  const toggleLabel = gameMode === 'ROAMING' ? 'Start Match' : 'Back To Roam';
 
   return (
-    <div className="pointer-events-none absolute top-4 left-1/2 z-20 w-[min(96%,1100px)] -translate-x-1/2">
-      <div className="pointer-events-auto rounded-xl border border-white/20 bg-stone-900/50 text-stone-100 shadow-2xl backdrop-blur-md">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-5">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.35em] text-amber-200/80">
-              Castle Fencing Toolbar
-            </div>
-            <div className="mt-1 text-base font-semibold md:text-lg">
-              {gameMode === 'ROAMING' ? 'Castle Hall Third-Person Roaming' : 'Fencing First-Person Match'}
-            </div>
-            <div className="mt-1 text-xs text-stone-300/90">
-              {gameMode === 'ROAMING'
-                ? 'Drag to orbit the camera. WASD follows the current viewing direction.'
-                : pointerLocked
-                  ? 'First-person view is locked. Press Esc to release.'
-                  : 'Click Enter First-Person to enable stable match camera control.'}
-            </div>
+    <div className="pointer-events-none absolute top-[10px] left-0 z-20 w-full px-4">
+      <div className="pointer-events-auto relative flex items-center justify-between max-h-[15vh] rounded-xl bg-stone-900/60 p-3 shadow-2xl backdrop-blur-md">
+        <div className="flex-1" />
+
+        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-6">
+          <div className="flex gap-1">
+            <PenaltyStrip active={penaltyCards.player.yellow} className="bg-yellow-400" />
+            <PenaltyStrip active={penaltyCards.player.red} className="bg-red-500" />
+            <PenaltyStrip active={penaltyCards.player.black} className="bg-black border border-white/20" />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {gameMode === 'FENCING' && (
-              <button
-                id="fencing-lock-button"
-                type="button"
-                className="rounded-lg border border-amber-200/35 bg-amber-100/10 px-3 py-2 text-sm text-amber-50 transition hover:bg-amber-100/20"
-              >
-                {pointerLocked ? 'First-Person Active' : 'Enter First-Person'}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onModeChange}
-              className="rounded-lg bg-stone-100/90 px-3 py-2 text-sm font-medium text-stone-900 transition hover:bg-white"
-            >
-              {toggleLabel}
-            </button>
-            <button
-              type="button"
-              onClick={onRestart}
-              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm transition hover:bg-white/20"
-            >
-              Restart
-            </button>
+          <LightDot
+            active={hitLights.player}
+            colorClass="bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.95)]"
+          />
+
+          <div className="flex flex-col items-center leading-none">
+            <div className="text-4xl font-serif text-white">
+              {score.player} <span className="px-2 text-stone-400">:</span> {score.opponent}
+            </div>
+            <div className="text-sm font-mono text-stone-300">{formatTime(timeLeft)}</div>
+          </div>
+
+          <LightDot
+            active={hitLights.opponent}
+            colorClass="bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.95)]"
+          />
+
+          <div className="flex gap-1">
+            <PenaltyStrip active={penaltyCards.opponent.yellow} className="bg-yellow-400" />
+            <PenaltyStrip active={penaltyCards.opponent.red} className="bg-red-500" />
+            <PenaltyStrip active={penaltyCards.opponent.black} className="bg-black border border-white/20" />
           </div>
         </div>
 
-        <div className="grid gap-3 border-t border-white/10 px-4 py-3 md:grid-cols-[1.1fr_0.9fr_1fr_1.2fr] md:px-5">
-          <div className="rounded-lg bg-black/15 px-3 py-2">
-            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Score</div>
-            <div className="mt-1 flex items-center gap-3 text-2xl font-bold">
-              <span>{score.player}</span>
-              <span className="text-stone-400">:</span>
-              <span>{score.opponent}</span>
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-black/15 px-3 py-2">
-            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Countdown</div>
-            <div className="mt-1 text-2xl font-bold">{formatTime(timeLeft)}</div>
-            <div className="mt-1 text-xs text-stone-300">
-              {gameMode === 'FENCING' && gameState === 'PLAYING' ? 'Timer running' : 'Timer paused'}
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-black/15 px-3 py-2">
-            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Hit Lights</div>
-            <div className="mt-2 flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
-                <LightDot
-                  active={hitLights.player}
-                  colorClass="bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.9)]"
-                />
-                <span>Player Light</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <LightDot
-                  active={hitLights.opponent}
-                  colorClass="bg-red-400 shadow-[0_0_16px_rgba(248,113,113,0.9)]"
-                />
-                <span>Opponent Light</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-black/15 px-3 py-2">
-            <div className="text-xs uppercase tracking-[0.25em] text-stone-300">Penalty Cards</div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-2 rounded-md bg-white/5 px-2 py-1.5">
-                <span className="text-sm">Player</span>
-                <div className="flex gap-1.5">
-                  <PenaltyStrip label="Yellow card" active={penaltyCards.player.yellow} className="bg-yellow-400" />
-                  <PenaltyStrip label="Red card" active={penaltyCards.player.red} className="bg-red-500" />
-                  <PenaltyStrip label="Black card" active={penaltyCards.player.black} className="bg-black" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md bg-white/5 px-2 py-1.5">
-                <span className="text-sm">Opponent</span>
-                <div className="flex gap-1.5">
-                  <PenaltyStrip label="Yellow card" active={penaltyCards.opponent.yellow} className="bg-yellow-400" />
-                  <PenaltyStrip label="Red card" active={penaltyCards.opponent.red} className="bg-red-500" />
-                  <PenaltyStrip label="Black card" active={penaltyCards.opponent.black} className="bg-black" />
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="flex flex-1 items-center justify-end gap-3">
+          {gameMode === 'FENCING' && (
+            <button
+              id="fencing-lock-button"
+              type="button"
+              className="rounded px-3 py-1 text-xs whitespace-nowrap bg-white/10 transition hover:bg-white/20"
+            >
+              {pointerLocked ? 'FPV Active' : 'Enter FPV'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRestart}
+            className="rounded px-3 py-1 text-xs whitespace-nowrap bg-white/10 transition hover:bg-white/20"
+          >
+            Restart
+          </button>
+          <button
+            type="button"
+            onClick={onModeChange}
+            className="rounded px-3 py-1 text-xs whitespace-nowrap bg-white/10 transition hover:bg-white/20"
+          >
+            {toggleLabel}
+          </button>
         </div>
       </div>
     </div>
